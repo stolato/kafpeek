@@ -1,48 +1,48 @@
 # kafpeek
 
-**Espie dentro dos seus tópicos Kafka.** UI leve para Apache Kafka: um único binário Go com a interface
-embutida, numa imagem distroless de ~11 MB, usando ~18–21 MB de RAM em repouso ou com live tail. Busca de mensagens com filtros CEL no servidor, live tail e
-suporte a AWS MSK IAM.
+**Peek inside your Kafka topics.** A lightweight UI for Apache Kafka: a single Go binary with the interface
+embedded, in a ~11 MB distroless image, using ~18–21 MB of RAM when idle or with live tail. Server-side message
+search with CEL filters, live tail, and AWS MSK IAM support.
 
-![kafpeek: busca de mensagens com filtro CEL](https://raw.githubusercontent.com/stolato/kafpeek/main/docs/screenshot.png)
+![kafpeek: message search with a CEL filter](https://raw.githubusercontent.com/stolato/kafpeek/main/docs/screenshot.png)
 
-**Código, documentação completa e issues:** [github.com/stolato/kafpeek](https://github.com/stolato/kafpeek)
+**Source, full documentation, and issues:** [github.com/stolato/kafpeek](https://github.com/stolato/kafpeek)
 
-## Recursos
+## Features
 
-- **Filtros [CEL](https://cel.dev) no servidor**: só as mensagens que casam trafegam até o navegador.
-  Ex.: `json.status == "ERROR" && json.amount > 500`
-- **Busca em streaming** nas mais recentes, num intervalo de tempo ou no **tópico inteiro**, com progresso real
-- **Live tail** em tempo real com os mesmos filtros
-- Tópicos, partições, configs e consumer groups com lag
-- **Produce** de mensagens com proteção para produção, ou modo somente leitura
-- **Não interfere em nada**: a leitura nunca usa consumer group nem commita offsets
-- PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM e **AWS MSK IAM**
-- Login (Basic Auth), proteção contra CSRF e DNS rebinding, CSP restritiva, usuário não-root
+- **[CEL](https://cel.dev) filters on the server**: only matching messages travel to the browser.
+  Example: `json.status == "ERROR" && json.amount > 500`
+- **Streaming search** over the most recent messages, a time range, or the **entire topic**, with real progress
+- **Live tail** in real time with the same filters
+- Topics, partitions, configs, and consumer groups with lag
+- **Produce** messages with production protection, or read-only mode
+- **Non-intrusive**: reads never use a consumer group or commit offsets
+- PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM, and **AWS MSK IAM**
+- Login (Basic Auth), CSRF and DNS rebinding protection, strict CSP, non-root user
 
 ## Tags
 
-| Tag | Descrição |
+| Tag | Description |
 |---|---|
-| `latest` | Última versão estável |
-| `X.Y.Z` (ex.: `0.1.1`) | Versão exata (recomendado em produção) |
-| `X.Y` (ex.: `0.1`) | Última correção da série |
+| `latest` | Latest stable version |
+| `X.Y.Z` (e.g. `0.1.1`) | Exact version (recommended in production) |
+| `X.Y` (e.g. `0.1`) | Latest patch of the series |
 
-Arquiteturas: `linux/amd64` e `linux/arm64`. Também em `ghcr.io/stolato/kafpeek`.
+Architectures: `linux/amd64` and `linux/arm64`. Also available at `ghcr.io/stolato/kafpeek`.
 
-## Início rápido
+## Quick start
 
 ```bash
 docker run -d --name kafpeek \
   -p 127.0.0.1:8090:8090 \
-  -e KAFKA_CLUSTER_NAME=meu-cluster \
+  -e KAFKA_CLUSTER_NAME=my-cluster \
   -e KAFKA_BROKERS=broker1:9092,broker2:9092 \
   stolato/kafpeek:latest
 ```
 
-Abra **http://localhost:8090**.
+Open **http://localhost:8090**.
 
-### AWS MSK com IAM
+### AWS MSK with IAM
 
 ```bash
 docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
@@ -54,8 +54,9 @@ docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
   stolato/kafpeek:latest
 ```
 
-Em ECS, EKS ou EC2, omita as variáveis `AWS_*`: a role da task, do pod ou da instância é usada
-automaticamente. Para perfil/SSO, monte `~/.aws` em `/home/nonroot/.aws` e defina `AWS_PROFILE`.
+On ECS, EKS, or EC2, omit the `AWS_*` variables: the task, pod, or instance role is used automatically.
+For a profile/SSO, mount `~/.aws` at `/home/nonroot/.aws` and set `AWS_PROFILE`. The region is read from the
+MSK broker hostname; set `AWS_REGION` only if your brokers use custom names without the region.
 
 ### SASL/SCRAM (MSK, Aiven, Redpanda...)
 
@@ -67,47 +68,48 @@ docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
   stolato/kafpeek:latest
 ```
 
-### Exposto na rede (com login)
+### Exposed on the network (with login)
 
 ```bash
 docker run -d --name kafpeek -p 8090:8090 \
   -e KAFKA_BROKERS=broker:9092 \
-  -e UI_USERNAME=admin -e UI_PASSWORD=uma-senha-forte \
-  -e ALLOWED_HOSTS=kafpeek.minhaempresa.internal \
+  -e UI_USERNAME=admin -e UI_PASSWORD=a-strong-password \
+  -e ALLOWED_HOSTS=kafpeek.mycompany.internal \
   stolato/kafpeek:latest
 ```
 
-Coloque HTTPS na frente (load balancer, Ingress ou proxy): o Basic Auth envia a senha a cada requisição.
+Put HTTPS in front (load balancer, Ingress, or proxy): Basic Auth sends the password with every request.
 
-## Variáveis de ambiente
+## Environment variables
 
-| Variável | Padrão | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `KAFKA_BROKERS` | `localhost:9092` | Brokers `host:porta`, separados por vírgula |
-| `KAFKA_CLUSTER_NAME` | `default` | Nome exibido na UI. Contendo `prod`, o Produce pede confirmação extra |
+| `KAFKA_BROKERS` | `localhost:9092` | Brokers as `host:port`, comma-separated |
+| `KAFKA_CLUSTER_NAME` | `default` | Name shown in the UI. If it contains `prod`, Produce asks for extra confirmation |
 | `KAFKA_AUTH` | `none` | `none`, `plain`, `scram-sha-256`, `scram-sha-512`, `aws-iam` |
-| `KAFKA_USERNAME` / `KAFKA_PASSWORD` | — | Credenciais para `plain` e `scram-*` |
-| `KAFKA_TLS` | automático | Liga sozinho com SASL ou certificados |
-| `KAFKA_TLS_CA_FILE` | — | CA(s) PEM extra(s) para validar o broker |
-| `KAFKA_TLS_CERT_FILE` / `KAFKA_TLS_KEY_FILE` | — | Certificado e chave PEM do cliente (mTLS) |
-| `KAFKA_READ_ONLY` | `false` | Desliga toda escrita (recomendado em produção) |
-| `UI_USERNAME` / `UI_PASSWORD` | — | Ativam o login (as duas juntas) |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Hostnames/IPs usados para acessar a UI |
-| `TRUST_PROXY` | `false` | Usa `X-Forwarded-For` (só atrás de proxy) |
-| `LOG_LEVEL` | `info` | `debug` para detalhes de conexão |
-| `AWS_*` | — | Credenciais AWS padrão para `aws-iam` |
+| `KAFKA_USERNAME` / `KAFKA_PASSWORD` | — | Credentials for `plain` and `scram-*` |
+| `KAFKA_TLS` | automatic | Turns on automatically with SASL or certificates |
+| `KAFKA_TLS_CA_FILE` | — | Extra PEM CA(s) to validate the broker |
+| `KAFKA_TLS_CERT_FILE` / `KAFKA_TLS_KEY_FILE` | — | Client PEM certificate and key (mTLS) |
+| `KAFKA_READ_ONLY` | `false` | Disables all writes (recommended in production) |
+| `UI_USERNAME` / `UI_PASSWORD` | — | Enable login (both together) |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Hostnames/IPs used to access the UI |
+| `TRUST_PROXY` | `false` | Uses `X-Forwarded-For` (only behind a proxy) |
+| `LOG_LEVEL` | `info` | `debug` for connection details |
+| `AWS_*` | — | AWS credentials and region for `aws-iam` (`AWS_REGION` only as a fallback when the broker hostname has no region) |
 
-Lista completa, cenários de conexão (TLS, mTLS, Confluent Cloud, Azure Event Hubs...) e a policy IAM para MSK
-estão no [README do GitHub](https://github.com/stolato/kafpeek#readme).
+The full list, connection scenarios (TLS, mTLS, Confluent Cloud, Azure Event Hubs...), and the MSK IAM policy are in the
+[GitHub README](https://github.com/stolato/kafpeek#readme). A Portuguese version is available at
+[README.pt-BR.md](https://github.com/stolato/kafpeek/blob/main/README.pt-BR.md).
 
-## Sobre a imagem
+## About the image
 
-- Base **distroless** (`gcr.io/distroless/static-debian12:nonroot`): sem shell, com as CAs públicas
-- Roda como usuário **não-root** (`65532`) e não escreve em disco (compatível com `read_only: true`)
-- Porta **8090**; `HEALTHCHECK` embutido (`/kafpeek healthcheck`)
-- `docker run --rm stolato/kafpeek version` mostra a versão e o commit
+- **Distroless** base (`gcr.io/distroless/static-debian12:nonroot`): no shell, with public CAs included
+- Runs as a **non-root** user (`65532`) and does not write to disk (compatible with `read_only: true`)
+- Port **8090**; built-in `HEALTHCHECK` (`/kafpeek healthcheck`)
+- `docker run --rm stolato/kafpeek version` shows the version and commit
 
-## Licença
+## License
 
-[MIT](https://github.com/stolato/kafpeek/blob/main/LICENSE). Apache Kafka é marca registrada da Apache
-Software Foundation; o kafpeek é um projeto independente.
+[MIT](https://github.com/stolato/kafpeek/blob/main/LICENSE). Apache Kafka is a registered trademark of the Apache
+Software Foundation; kafpeek is an independent project.
