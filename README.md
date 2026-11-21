@@ -10,7 +10,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/stolato/kafpeek?color=00ADD8)](go.mod)
 [![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white)](web/package.json)
-[![Docker](https://img.shields.io/badge/docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![Docker Hub](https://img.shields.io/docker/v/stolato/kafpeek?sort=semver&logo=docker&logoColor=white&label=docker&color=2496ED)](https://hub.docker.com/r/stolato/kafpeek)
+[![Release](https://github.com/stolato/kafpeek/actions/workflows/release.yml/badge.svg)](https://github.com/stolato/kafpeek/actions/workflows/release.yml)
 
 <img src="docs/screenshot.png" alt="kafpeek: busca de mensagens com filtro CEL" width="900">
 
@@ -63,15 +64,16 @@ make seed        # opcional (requer Go): tópicos de exemplo com eventos fake
 **Conectar no seu cluster com Docker:**
 
 ```bash
-docker build -t kafpeek .
-
 docker run -d --name kafpeek \
   -p 127.0.0.1:8090:8090 \
   -e KAFKA_CLUSTER_NAME=meu-cluster \
   -e KAFKA_BROKERS=broker1:9092,broker2:9092 \
   -e KAFKA_AUTH=none \
-  kafpeek
+  stolato/kafpeek:latest
 ```
+
+A imagem é publicada no [Docker Hub](https://hub.docker.com/r/stolato/kafpeek) (`stolato/kafpeek`) e no GitHub
+Container Registry (`ghcr.io/stolato/kafpeek`), para `linux/amd64` e `linux/arm64`.
 
 Abra **http://localhost:8090**. Para TLS, SASL ou MSK, veja [Conexões suportadas](#conexões-suportadas).
 
@@ -246,7 +248,7 @@ ALLOWED_HOSTS=kafpeek.minhaempresa.internal
 ```
 
 ```bash
-docker run -d --name kafpeek -p 8090:8090 --env-file kafpeek.env <registry>/kafpeek:latest
+docker run -d --name kafpeek -p 8090:8090 --env-file kafpeek.env stolato/kafpeek:latest
 ```
 
 **Exemplo: perfil / SSO da sua máquina**
@@ -257,7 +259,7 @@ docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
   -e AWS_PROFILE=meu-perfil \
   -e KAFKA_CLUSTER_NAME=msk-prod -e KAFKA_AUTH=aws-iam \
   -e KAFKA_BROKERS=b-1-public.mycluster.xxxx.c3.kafka.sa-east-1.amazonaws.com:9198 \
-  <registry>/kafpeek:latest
+  stolato/kafpeek:latest
 ```
 
 Com **SSO**, monte `~/.aws` com escrita (sem `:ro`) para o cache do token poder ser renovado.
@@ -360,7 +362,7 @@ públicas e um `HEALTHCHECK` (`/kafpeek healthcheck`). Arquiteturas: `linux/amd6
 ### Com arquivo de variáveis
 
 ```bash
-docker run -d --name kafpeek -p 127.0.0.1:8090:8090 --env-file kafpeek.env <registry>/kafpeek:latest
+docker run -d --name kafpeek -p 127.0.0.1:8090:8090 --env-file kafpeek.env stolato/kafpeek:latest
 ```
 
 ### AWS MSK IAM
@@ -386,7 +388,7 @@ Os arquivos precisam ser legíveis pelo usuário `65532` (`chmod 644`, ou `644` 
 ```yaml
 services:
   kafpeek:
-    image: <registry>/kafpeek:0.1.0
+    image: stolato/kafpeek:0.1.0
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
@@ -411,7 +413,7 @@ spec:
       securityContext: { runAsNonRoot: true }
       containers:
         - name: kafpeek
-          image: <registry>/kafpeek:0.1.0
+          image: stolato/kafpeek:0.1.0
           ports: [{ containerPort: 8090 }]
           envFrom: [{ secretRef: { name: kafpeek-env } }]
           env:
@@ -436,10 +438,19 @@ a exposição é o mapeamento de porta:
 
 ```bash
 make image                                   # imagem local (docker ou podman, detectado)
-make image-push IMAGE=registry.exemplo.com/kafpeek   # multi-arch (amd64+arm64) com docker buildx
+make image-push IMAGE=registry.exemplo.com/kafpeek   # multi-arch (amd64+arm64), requer Docker com buildx
 ```
 
 A versão vem do arquivo `VERSION`; o commit e a data do build entram automaticamente.
+
+**Releases oficiais** são publicadas pelo GitHub Actions ([`release.yml`](.github/workflows/release.yml)):
+ao enviar uma tag `vX.Y.Z` igual ao arquivo `VERSION`, os testes rodam e a imagem multi-arch vai para o
+Docker Hub e o GHCR com as tags `X.Y.Z`, `X.Y` e `latest`.
+
+```bash
+echo 0.2.0 > VERSION && git commit -am "Release v0.2.0"
+git tag -a v0.2.0 -m "kafpeek v0.2.0" && git push origin main v0.2.0
+```
 `docker run --rm <imagem> version` mostra a versão embutida.
 
 ---

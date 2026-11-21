@@ -7,8 +7,10 @@ PKG        := github.com/stolato/kafpeek/internal/version
 IMAGE      ?= kafpeek
 CONTAINER  ?= $(shell command -v docker >/dev/null 2>&1 && echo docker || echo podman)
 PLATFORMS  ?= linux/amd64,linux/arm64
-# podman's default OCI format drops HEALTHCHECK; the docker format keeps it
-FORMAT     := $(if $(findstring podman,$(CONTAINER)),--format docker,)
+# podman's default OCI format drops HEALTHCHECK; the docker format keeps it.
+# Detected from the version output: `docker` may be a podman alias/wrapper.
+IS_PODMAN  := $(shell $(CONTAINER) --version 2>/dev/null | grep -qi podman && echo 1)
+FORMAT     := $(if $(IS_PODMAN),--format docker,)
 LDFLAGS    := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).BuildDate=$(BUILD_DATE)
 
 kafka-up:        ## start local Kafka
@@ -36,7 +38,7 @@ image:           ## build the container image for this machine: make image [IMAG
 	$(CONTAINER) build $(FORMAT) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
 		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
 
-image-push:      ## multi-arch build + push (docker buildx): make image-push IMAGE=registry/kafpeek
+image-push:      ## multi-arch build + push (needs Docker buildx; releases are published by CI): make image-push IMAGE=registry/kafpeek
 	docker buildx build --platform $(PLATFORMS) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
 		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest --push .
 
