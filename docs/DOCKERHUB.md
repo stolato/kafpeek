@@ -1,7 +1,7 @@
 # kafpeek
 
 **Espie dentro dos seus tópicos Kafka.** UI leve para Apache Kafka: um único binário Go com a interface
-embutida, numa imagem distroless de ~30 MB. Busca de mensagens com filtros CEL no servidor, live tail e
+embutida, numa imagem distroless de ~11 MB, usando ~18–21 MB de RAM em repouso ou com live tail. Busca de mensagens com filtros CEL no servidor, live tail e
 suporte a AWS MSK IAM.
 
 ![kafpeek: busca de mensagens com filtro CEL](https://raw.githubusercontent.com/stolato/kafpeek/main/docs/screenshot.png)

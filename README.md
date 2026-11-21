@@ -1,11 +1,15 @@
+<p align="center">
+  <b>English</b> · <a href="README.pt-BR.md">Português</a>
+</p>
+
 <div align="center">
 
 <img src="web/public/favicon.svg" width="72" alt="kafpeek logo">
 
 # kafpeek
 
-**Espie dentro dos seus tópicos Kafka.** UI leve para Apache Kafka: um único binário (ou imagem Docker de
-~30 MB) com busca de mensagens por filtros CEL no servidor, live tail e suporte a AWS MSK IAM.
+**Peek inside your Kafka topics.** A lightweight UI for Apache Kafka: a single binary (or a ~11 MB Docker image using ~18–21 MB of RAM)
+with server-side message search using CEL filters, live tail, and AWS MSK IAM support.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/stolato/kafpeek?color=00ADD8)](go.mod)
@@ -13,110 +17,110 @@
 [![Docker Hub](https://img.shields.io/docker/v/stolato/kafpeek?sort=semver&logo=docker&logoColor=white&label=docker&color=2496ED)](https://hub.docker.com/r/stolato/kafpeek)
 [![Release](https://github.com/stolato/kafpeek/actions/workflows/release.yml/badge.svg)](https://github.com/stolato/kafpeek/actions/workflows/release.yml)
 
-<img src="docs/screenshot.png" alt="kafpeek: busca de mensagens com filtro CEL" width="900">
+<img src="docs/screenshot.png" alt="kafpeek: message search with a CEL filter" width="900">
 
 </div>
 
-## Por que kafpeek?
+## Why kafpeek?
 
-- **Encontre a mensagem certa rápido**: filtros [CEL](https://cel.dev) rodam **no servidor**, e só o que casa
-  trafega até o navegador. Busca em streaming nas mais recentes, num intervalo de tempo ou no **tópico inteiro**,
-  com progresso real e botão Stop.
-- **Live tail** em tempo real, com os mesmos filtros.
-- **Não interfere em nada**: a leitura nunca usa consumer group nem commita offsets.
-- **Tudo num binário só**: backend Go ([franz-go](https://github.com/twmb/franz-go) + chi) com o frontend Angular
-  embutido. Sem JVM, sem banco, sem dependências.
-- **Conecta em qualquer cluster**: PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM e **AWS MSK IAM** (chaves, perfil/SSO
-  ou role de ECS/EKS/EC2).
-- Tópicos, partições, configs e consumer groups com lag (e tendência).
-- **Produce** de mensagens com proteção para clusters de produção, ou modo **somente leitura**.
-- Seguro por padrão: login (Basic Auth), proteção contra CSRF e DNS rebinding, CSP restritiva, usuário não-root.
+- **Find the right message fast**: [CEL](https://cel.dev) filters run **on the server**, so only matching messages
+  travel to the browser. Streaming search over the most recent messages, a time range, or the **entire topic**,
+  with real progress and a Stop button.
+- **Live tail** in real time, with the same filters.
+- **Non-intrusive**: reads never use a consumer group and never commit offsets.
+- **One binary, nothing else**: Go backend ([franz-go](https://github.com/twmb/franz-go) + chi) with the Angular
+  frontend embedded. No JVM, no database, no external dependencies.
+- **Connects to any cluster**: PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM, and **AWS MSK IAM** (access keys,
+  profile/SSO, or the ECS/EKS/EC2 role).
+- Topics, partitions, configs, and consumer groups with lag (and trend).
+- **Produce** messages with protection for production clusters, or **read-only** mode.
+- Secure by default: login (Basic Auth), CSRF and DNS rebinding protection, strict CSP, non-root user.
 
 ---
 
-## Sumário
+## Table of contents
 
-1. [Início rápido](#início-rápido)
-2. [Conexões suportadas](#conexões-suportadas)
-3. [Docker em detalhe](#docker-em-detalhe)
-4. [Referência de variáveis de ambiente](#referência-de-variáveis-de-ambiente)
-5. [Segurança e login](#segurança-e-login)
-6. [Filtros (CEL)](#filtros-cel)
-7. [Produzindo mensagens](#produzindo-mensagens)
-8. [Desenvolvimento](#desenvolvimento)
+1. [Quick start](#quick-start)
+2. [Supported connections](#supported-connections)
+3. [Docker in detail](#docker-in-detail)
+4. [Environment variable reference](#environment-variable-reference)
+5. [Security and login](#security-and-login)
+6. [Filters (CEL)](#filters-cel)
+7. [Producing messages](#producing-messages)
+8. [Development](#development)
 9. [API](#api)
-10. [Arquitetura](#arquitetura)
-11. [Contribuindo](#contribuindo)
-12. [Licença](#licença)
+10. [Architecture](#architecture)
+11. [Contributing](#contributing)
+12. [License](#license)
 
 ---
 
-## Início rápido
+## Quick start
 
-**Só quer experimentar?** Sobe um Kafka local e a UI em containers:
+**Just want to try it?** Start a local Kafka and the UI in containers:
 
 ```bash
 git clone https://github.com/stolato/kafpeek.git && cd kafpeek
-make demo        # Kafka + kafpeek; abra http://localhost:8090
-make seed        # opcional (requer Go): tópicos de exemplo com eventos fake
+make demo        # Kafka + kafpeek; open http://localhost:8090
+make seed        # optional (requires Go): sample topics with fake events
 ```
 
-**Conectar no seu cluster com Docker:**
+**Connect to your cluster with Docker:**
 
 ```bash
 docker run -d --name kafpeek \
   -p 127.0.0.1:8090:8090 \
-  -e KAFKA_CLUSTER_NAME=meu-cluster \
+  -e KAFKA_CLUSTER_NAME=my-cluster \
   -e KAFKA_BROKERS=broker1:9092,broker2:9092 \
   -e KAFKA_AUTH=none \
   stolato/kafpeek:latest
 ```
 
-A imagem é publicada no [Docker Hub](https://hub.docker.com/r/stolato/kafpeek) (`stolato/kafpeek`) e no GitHub
-Container Registry (`ghcr.io/stolato/kafpeek`), para `linux/amd64` e `linux/arm64`.
+The image is published to [Docker Hub](https://hub.docker.com/r/stolato/kafpeek) (`stolato/kafpeek`) and to the
+GitHub Container Registry (`ghcr.io/stolato/kafpeek`), for `linux/amd64` and `linux/arm64`.
 
-Abra **http://localhost:8090**. Para TLS, SASL ou MSK, veja [Conexões suportadas](#conexões-suportadas).
+Open **http://localhost:8090**. For TLS, SASL, or MSK, see [Supported connections](#supported-connections).
 
-**Binário, sem Docker** (requer Go 1.27+ e Node 24+):
+**Binary, without Docker** (requires Go 1.27+ and Node 24+):
 
 ```bash
-make build       # gera bin/kafpeek com a UI embutida
+make build       # builds bin/kafpeek with the UI embedded
 KAFKA_BROKERS=localhost:9092 ./bin/kafpeek
 ```
 
 ---
 
-## Conexões suportadas
+## Supported connections
 
-Resumo — escolha a linha do seu cluster e siga a seção correspondente:
+Summary: pick the row that matches your cluster and follow the corresponding section:
 
-| Cenário | `KAFKA_AUTH` | TLS | Exemplos |
+| Scenario | `KAFKA_AUTH` | TLS | Examples |
 |---|---|---|---|
-| [Sem autenticação, sem TLS](#1-plaintext-sem-autenticação) | `none` | não | Kafka local, dev, rede interna |
-| [Só TLS (criptografia)](#2-tls-sem-autenticação) | `none` | sim | MSK porta 9094 sem auth de cliente |
-| [TLS com CA privada](#3-tls-com-ca-privada) | qualquer | sim + `KAFKA_TLS_CA_FILE` | Kafka próprio, Strimzi, Aiven |
-| [mTLS (certificado de cliente)](#4-mtls-certificado-de-cliente) | `none` | sim + cert/key | MSK mTLS (9094/9194), Strimzi, Aiven |
-| [SASL/PLAIN](#5-saslplain) | `plain` | sim (padrão) | Confluent Cloud, Azure Event Hubs |
-| [SASL/SCRAM](#6-saslscram-sha-256--sha-512) | `scram-sha-512` / `scram-sha-256` | sim (padrão) | MSK SCRAM (9096/9196), Aiven, Redpanda, Strimzi |
-| [AWS MSK IAM](#7-aws-msk-com-iam) | `aws-iam` | sim (obrigatório) | MSK provisionado (9098/9198), MSK Serverless |
+| [No authentication, no TLS](#1-plaintext-no-authentication) | `none` | no | Local Kafka, dev, internal network |
+| [TLS only (encryption)](#2-tls-without-authentication) | `none` | yes | MSK on port 9094 without client auth |
+| [TLS with a private CA](#3-tls-with-a-private-ca) | any | yes + `KAFKA_TLS_CA_FILE` | Self-hosted Kafka, Strimzi, Aiven |
+| [mTLS (client certificate)](#4-mtls-client-certificate) | `none` | yes + cert/key | MSK mTLS (9094/9194), Strimzi, Aiven |
+| [SASL/PLAIN](#5-saslplain) | `plain` | yes (default) | Confluent Cloud, Azure Event Hubs |
+| [SASL/SCRAM](#6-saslscram-sha-256--sha-512) | `scram-sha-512` / `scram-sha-256` | yes (default) | MSK SCRAM (9096/9196), Aiven, Redpanda, Strimzi |
+| [AWS MSK IAM](#7-aws-msk-with-iam) | `aws-iam` | yes (required) | Provisioned MSK (9098/9198), MSK Serverless |
 
-Regras gerais:
-- `KAFKA_BROKERS` aceita vários brokers separados por vírgula (`host:porta`). Basta um alcançável — o resto é descoberto.
-- **TLS liga sozinho** quando há SASL (`plain`, `scram-*`, `aws-iam`) ou certificados configurados.
-  Force com `KAFKA_TLS=true|false`.
-- A leitura nunca usa consumer group nem commita offsets — não interfere nos consumidores reais.
+General rules:
+- `KAFKA_BROKERS` accepts several brokers separated by commas (`host:port`). One reachable broker is enough; the rest are discovered.
+- **TLS turns on automatically** when SASL (`plain`, `scram-*`, `aws-iam`) or certificates are configured.
+  Force it with `KAFKA_TLS=true|false`.
+- Reads never use a consumer group or commit offsets, so they don't interfere with your real consumers.
 
-### 1) PLAINTEXT (sem autenticação)
+### 1) PLAINTEXT (no authentication)
 
 ```env
 KAFKA_BROKERS=kafka:9092
 KAFKA_AUTH=none
 ```
 
-### 2) TLS sem autenticação
+### 2) TLS without authentication
 
-Tráfego criptografado, sem credencial do cliente. O certificado do broker é validado contra as CAs públicas
-do sistema (incluídas na imagem).
+Encrypted traffic, no client credentials. The broker certificate is validated against the system's public CAs
+(included in the image).
 
 ```env
 KAFKA_BROKERS=b-1.mycluster.xxxx.kafka.us-east-1.amazonaws.com:9094
@@ -124,43 +128,43 @@ KAFKA_AUTH=none
 KAFKA_TLS=true
 ```
 
-### 3) TLS com CA privada
+### 3) TLS with a private CA
 
-Quando o broker usa certificado emitido por uma CA interna (erro típico sem isso:
+When the broker uses a certificate issued by an internal CA (the typical error without this is
 `x509: certificate signed by unknown authority`):
 
 ```env
-KAFKA_TLS_CA_FILE=/certs/ca.pem        # PEM; pode ter vários certificados
-# KAFKA_TLS_SERVER_NAME=kafka.interno  # só se o nome no certificado diferir do host do broker
+KAFKA_TLS_CA_FILE=/certs/ca.pem        # PEM; may contain several certificates
+# KAFKA_TLS_SERVER_NAME=kafka.internal # only if the name in the certificate differs from the broker host
 ```
 
-A CA é **somada** às CAs do sistema. Combina com qualquer `KAFKA_AUTH` (ex.: SCRAM + CA privada).
+The CA is **added** to the system CAs. It works with any `KAFKA_AUTH` (e.g., SCRAM + private CA).
 
 - **Strimzi**: `kubectl get secret <cluster>-cluster-ca-cert -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.pem`
-- **Aiven**: baixe o `ca.pem` no console do serviço.
+- **Aiven**: download `ca.pem` from the service console.
 
-> `KAFKA_TLS_INSECURE_SKIP_VERIFY=true` desliga a validação do certificado. **Só para testes** — permite
-> ataques man-in-the-middle.
+> `KAFKA_TLS_INSECURE_SKIP_VERIFY=true` disables certificate validation. **For testing only** — it allows
+> man-in-the-middle attacks.
 
-### 4) mTLS (certificado de cliente)
+### 4) mTLS (client certificate)
 
-O cliente se autentica com certificado (PEM). Se o broker usa CA privada, informe-a também.
+The client authenticates with a certificate (PEM). If the broker uses a private CA, provide it too.
 
 ```env
 KAFKA_BROKERS=b-1.mycluster.xxxx.kafka.us-east-1.amazonaws.com:9094
 KAFKA_AUTH=none
 KAFKA_TLS_CERT_FILE=/certs/client.pem
 KAFKA_TLS_KEY_FILE=/certs/client.key
-KAFKA_TLS_CA_FILE=/certs/ca.pem        # se a CA do broker for privada
+KAFKA_TLS_CA_FILE=/certs/ca.pem        # if the broker's CA is private
 ```
 
-- **MSK com autenticação TLS (AWS Private CA)**: portas **9094** (VPC) / **9194** (público). O certificado do
-  cliente é emitido pela sua AWS Private CA; o broker do MSK usa certificado público, então `KAFKA_TLS_CA_FILE`
-  normalmente não é necessário.
-- **Strimzi** (`KafkaUser` com `authentication: tls`): `user.crt` / `user.key` do secret do usuário + CA do cluster.
-- **Aiven**: `service.cert`, `service.key` e `ca.pem` do console.
-- Chaves em formato **PKCS#12/JKS** precisam ser convertidas para PEM:
-  `openssl pkcs12 -in client.p12 -out client.pem -clcerts -nokeys` e `... -out client.key -nocerts -nodes`.
+- **MSK with TLS authentication (AWS Private CA)**: ports **9094** (VPC) / **9194** (public). The client certificate
+  is issued by your AWS Private CA; the MSK broker uses a public certificate, so `KAFKA_TLS_CA_FILE` is usually
+  not needed.
+- **Strimzi** (`KafkaUser` with `authentication: tls`): `user.crt` / `user.key` from the user's secret + the cluster CA.
+- **Aiven**: `service.cert`, `service.key`, and `ca.pem` from the console.
+- Keys in **PKCS#12/JKS** format must be converted to PEM:
+  `openssl pkcs12 -in client.p12 -out client.pem -clcerts -nokeys` and `... -out client.key -nocerts -nodes`.
 
 ### 5) SASL/PLAIN
 
@@ -170,68 +174,69 @@ KAFKA_USERNAME=...
 KAFKA_PASSWORD=...
 ```
 
-- **Confluent Cloud**: bootstrap `pkc-xxxxx.<região>.<cloud>.confluent.cloud:9092`, usuário = **API key**,
-  senha = **API secret**.
-- **Azure Event Hubs** (endpoint Kafka, tier Standard ou superior): bootstrap `<namespace>.servicebus.windows.net:9093`,
-  `KAFKA_USERNAME=$ConnectionString` (literal), `KAFKA_PASSWORD=<connection string do namespace>`.
-  **No arquivo `.env`, use aspas simples** — `KAFKA_USERNAME='$ConnectionString'` —, senão o `$` é tratado como
-  variável e o valor vira `onnectionString`, com falha de login sem explicação. (Em `docker --env-file` e em
-  `-e` não precisa: lá o `$` é literal; no shell, use aspas simples.) Event Hubs implementa só
-  parte das APIs de administração do Kafka; algumas telas (configs, consumer groups) podem vir incompletas.
+- **Confluent Cloud**: bootstrap `pkc-xxxxx.<region>.<cloud>.confluent.cloud:9092`, username = **API key**,
+  password = **API secret**.
+- **Azure Event Hubs** (Kafka endpoint, Standard tier or higher): bootstrap `<namespace>.servicebus.windows.net:9093`,
+  `KAFKA_USERNAME=$ConnectionString` (literal), `KAFKA_PASSWORD=<namespace connection string>`.
+  **In the `.env` file, use single quotes** — `KAFKA_USERNAME='$ConnectionString'` — otherwise `$` is treated as a
+  variable and the value becomes `onnectionString`, failing login with no clear explanation. (With `docker --env-file`
+  and `-e` you don't need quotes: there `$` is literal; in the shell, use single quotes.) Event Hubs implements only
+  part of the Kafka admin APIs, so some screens (configs, consumer groups) may be incomplete.
 
-> PLAIN envia a senha ao broker — só use com TLS (é o padrão).
+> PLAIN sends the password to the broker — only use it with TLS (which is the default).
 
 ### 6) SASL/SCRAM (SHA-256 / SHA-512)
 
 ```env
-KAFKA_AUTH=scram-sha-512     # ou scram-sha-256, conforme o cluster
+KAFKA_AUTH=scram-sha-512     # or scram-sha-256, depending on the cluster
 KAFKA_USERNAME=...
 KAFKA_PASSWORD=...
 ```
 
-- **AWS MSK SCRAM**: sempre `scram-sha-512`, portas **9096** (VPC) / **9196** (público). Usuário/senha vêm de um
-  secret do Secrets Manager associado ao cluster.
-- **Aiven**: `scram-sha-256`, porta SASL do serviço (+ `KAFKA_TLS_CA_FILE` com o `ca.pem` do Aiven).
-- **Redpanda Cloud**: `scram-sha-256` ou `scram-sha-512`, conforme o usuário criado.
-- **Strimzi** (`authentication: scram-sha-512`): senha no secret do `KafkaUser` + CA do cluster.
+- **AWS MSK SCRAM**: always `scram-sha-512`, ports **9096** (VPC) / **9196** (public). Username/password come from a
+  Secrets Manager secret associated with the cluster.
+- **Aiven**: `scram-sha-256`, the service's SASL port (+ `KAFKA_TLS_CA_FILE` with Aiven's `ca.pem`).
+- **Redpanda Cloud**: `scram-sha-256` or `scram-sha-512`, depending on the user you created.
+- **Strimzi** (`authentication: scram-sha-512`): password in the `KafkaUser` secret + the cluster CA.
 
-### 7) AWS MSK com IAM
+### 7) AWS MSK with IAM
 
-**Resumo: o que passar**
+**Summary: what to pass**
 
-| Variável | Obrigatória? | Valor |
+| Variable | Required? | Value |
 |---|---|---|
-| `KAFKA_AUTH` | sim | `aws-iam` |
-| `KAFKA_BROKERS` | sim | Bootstrap **IAM** do cluster (porta **9098** na VPC, **9198** acesso público), separados por vírgula |
-| `KAFKA_CLUSTER_NAME` | não | Nome exibido na UI (ex.: `msk-prod`) |
-| `KAFKA_READ_ONLY` | não (recomendado) | `true` para bloquear o Produce |
-| Credenciais AWS | sim, **uma** das opções abaixo | Chaves, perfil/SSO ou role da plataforma |
+| `KAFKA_AUTH` | yes | `aws-iam` |
+| `KAFKA_BROKERS` | yes | Cluster **IAM** bootstrap (port **9098** in the VPC, **9198** for public access), comma-separated |
+| `KAFKA_CLUSTER_NAME` | no | Name shown in the UI (e.g., `msk-prod`) |
+| `KAFKA_READ_ONLY` | no (recommended) | `true` to block Produce |
+| `AWS_REGION` | only in the exception below | Signing region, used **only** when the broker hostname doesn't contain it (e.g., custom DNS/CNAME for the brokers) |
+| AWS credentials | yes, **one** of the options below | Access keys, profile/SSO, or the platform role |
 
-Não precisa de `KAFKA_TLS` (liga sozinho com `aws-iam`), nem de `KAFKA_USERNAME`/`KAFKA_PASSWORD`, nem de
-`AWS_REGION` (a região é deduzida do hostname do broker).
+You don't need `KAFKA_TLS` (it turns on automatically with `aws-iam`), nor `KAFKA_USERNAME`/`KAFKA_PASSWORD`. For
+standard MSK hostnames (`b-1.<cluster>.<id>.kafka.<region>.amazonaws.com`) the region is read from the hostname, so
+`AWS_REGION` isn't needed. If your brokers use custom names without the region, set `AWS_REGION=<region>`.
 
-O bootstrap fica em *AWS Console → MSK → cluster → View client information* ou em
-`aws kafka get-bootstrap-brokers --cluster-arn <arn>` (campos `BootstrapBrokerStringSaslIam` /
+The bootstrap string is in *AWS Console → MSK → cluster → View client information*, or via
+`aws kafka get-bootstrap-brokers --cluster-arn <arn>` (fields `BootstrapBrokerStringSaslIam` /
 `BootstrapBrokerStringPublicSaslIam`).
 
-**Credenciais: escolha uma opção**
+**Credentials: choose one option**
 
-| Onde roda | Variáveis | Observação |
+| Where it runs | Variables | Notes |
 |---|---|---|
-| **ECS / Fargate** | nenhuma | Usa a *task role* da task definition |
-| **EKS** | nenhuma | IRSA (`serviceAccountName` anotado com a role) ou EKS Pod Identity |
-| **EC2** | nenhuma | Usa o *instance profile* |
-| Chave de acesso (usuário IAM) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Evite em produção: chave `AKIA...` de longa duração |
-| Credencial temporária (STS) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Expira; o container precisa ser reiniciado com novas credenciais |
-| Perfil / SSO da máquina | `AWS_PROFILE` + `~/.aws` montado em `/home/nonroot/.aws` | Com SSO, rode `aws sso login` no host |
-| Assumir outra role | `AWS_PROFILE` apontando para um perfil com `role_arn` + `source_profile` (ou `credential_source`) em `~/.aws/config` | `AWS_ROLE_ARN` sozinho **não** funciona: ele só vale junto com `AWS_WEB_IDENTITY_TOKEN_FILE` (caso do IRSA, que o EKS preenche sozinho) |
+| **ECS / Fargate** | none | Uses the task role from the task definition |
+| **EKS** | none | IRSA (`serviceAccountName` annotated with the role) or EKS Pod Identity |
+| **EC2** | none | Uses the instance profile |
+| Access key (IAM user) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Avoid in production: long-lived `AKIA...` key |
+| Temporary credential (STS) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Expires; the container must be restarted with new credentials |
+| Machine profile / SSO | `AWS_PROFILE` + `~/.aws` mounted at `/home/nonroot/.aws` | With SSO, run `aws sso login` on the host |
+| Assume another role | `AWS_PROFILE` pointing to a profile with `role_arn` + `source_profile` (or `credential_source`) in `~/.aws/config` | `AWS_ROLE_ARN` alone does **not** work: it only applies together with `AWS_WEB_IDENTITY_TOKEN_FILE` (the IRSA case, which EKS fills in automatically) |
 
-Use só uma opção. Se houver mais de uma, `AWS_PROFILE` (quando definido) tem prioridade; depois vêm
-`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, web identity (IRSA), o perfil padrão de `~/.aws` e, por último,
-a role do ECS/EC2. As credenciais
-temporárias de roles/SSO são renovadas sozinhas a cada reautenticação.
+Use only one option. If more than one is present, `AWS_PROFILE` (when set) takes priority; then come
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, web identity (IRSA), the default profile in `~/.aws`, and finally
+the ECS/EC2 role. Temporary credentials from roles/SSO are renewed automatically on each re-authentication.
 
-**Exemplo: chave de acesso (arquivo `kafpeek.env`)**
+**Example: access key (`kafpeek.env` file)**
 
 ```env
 KAFKA_CLUSTER_NAME=msk-prod
@@ -240,52 +245,52 @@ KAFKA_BROKERS=b-1-public.mycluster.xxxx.c3.kafka.sa-east-1.amazonaws.com:9198,b-
 KAFKA_READ_ONLY=true
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
-# AWS_SESSION_TOKEN=...   # só para credenciais temporárias
+# AWS_SESSION_TOKEN=...   # only for temporary credentials
 
 UI_USERNAME=admin
-UI_PASSWORD=troque-isto
-ALLOWED_HOSTS=kafpeek.minhaempresa.internal
+UI_PASSWORD=change-this
+ALLOWED_HOSTS=kafpeek.mycompany.internal
 ```
 
 ```bash
 docker run -d --name kafpeek -p 8090:8090 --env-file kafpeek.env stolato/kafpeek:latest
 ```
 
-**Exemplo: perfil / SSO da sua máquina**
+**Example: your machine's profile / SSO**
 
 ```bash
 docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
   -v ~/.aws:/home/nonroot/.aws \
-  -e AWS_PROFILE=meu-perfil \
+  -e AWS_PROFILE=my-profile \
   -e KAFKA_CLUSTER_NAME=msk-prod -e KAFKA_AUTH=aws-iam \
   -e KAFKA_BROKERS=b-1-public.mycluster.xxxx.c3.kafka.sa-east-1.amazonaws.com:9198 \
   stolato/kafpeek:latest
 ```
 
-Com **SSO**, monte `~/.aws` com escrita (sem `:ro`) para o cache do token poder ser renovado.
+With **SSO**, mount `~/.aws` with write access (no `:ro`) so the token cache can be renewed.
 
-**Exemplo: ECS / EKS / EC2 (role da plataforma)**
+**Example: ECS / EKS / EC2 (platform role)**
 
 ```env
 KAFKA_CLUSTER_NAME=msk-prod
 KAFKA_AUTH=aws-iam
 KAFKA_BROKERS=b-1.mycluster.xxxx.c3.kafka.sa-east-1.amazonaws.com:9098,b-2.mycluster.xxxx.c3.kafka.sa-east-1.amazonaws.com:9098
 KAFKA_READ_ONLY=true
-# nenhuma variável AWS_*: a role da task/pod/instância é usada automaticamente
+# no AWS_* variables: the task/pod/instance role is used automatically
 ```
 
-**Portas do MSK** (cada autenticação tem seu bootstrap):
+**MSK ports** (each authentication method has its own bootstrap):
 
-| Autenticação | Dentro da VPC | Acesso público |
+| Authentication | Inside the VPC | Public access |
 |---|---|---|
 | IAM | 9098 | **9198** |
 | SASL/SCRAM | 9096 | 9196 |
 | TLS / mTLS | 9094 | 9194 |
-| Sem auth (plaintext) | 9092 | — |
+| No auth (plaintext) | 9092 | — |
 
-**MSK Serverless**: só IAM, porta 9098, apenas dentro da VPC.
+**MSK Serverless**: IAM only, port 9098, VPC-only.
 
-**Permissões IAM** da identidade usada (troque região, conta, nome e UUID do cluster):
+**IAM permissions** for the identity in use (replace region, account, cluster name, and UUID):
 
 ```json
 {
@@ -314,52 +319,52 @@ KAFKA_READ_ONLY=true
 }
 ```
 
-Para usar o Produce, inclua `kafka-cluster:WriteData` no bloco de tópicos (e deixe `KAFKA_READ_ONLY` desligado).
+To use Produce, add `kafka-cluster:WriteData` to the topics block (and leave `KAFKA_READ_ONLY` off).
 
-**Erros comuns**
+**Common errors**
 
-- *Timeout / não conecta*: o security group do MSK precisa liberar a porta (9098/9198) para onde o container
-  roda; acesso público precisa estar habilitado no cluster para usar 9198.
-- *`loading AWS credentials` / `retrieving AWS credentials`*: nenhuma credencial foi encontrada (variável
-  faltando, `~/.aws` não montado, SSO expirado: rode `aws sso login`).
-- *Conecta mas não lista tópicos / `access denied`*: falta permissão na policy acima ou o ARN do recurso está
-  errado.
-- *Porta errada* (ex.: 9096 com `aws-iam`): use o bootstrap **IAM**, não o de SCRAM/TLS.
+- *Timeout / can't connect*: the MSK security group must allow the port (9098/9198) from wherever the container runs;
+  public access must be enabled on the cluster to use 9198.
+- *`loading AWS credentials` / `retrieving AWS credentials`*: no credentials were found (missing variable,
+  `~/.aws` not mounted, expired SSO: run `aws sso login`).
+- *Connects but doesn't list topics / `access denied`*: missing permission in the policy above, or the resource ARN is
+  wrong.
+- *Wrong port* (e.g., 9096 with `aws-iam`): use the **IAM** bootstrap, not the SCRAM/TLS one.
 
-Use `LOG_LEVEL=debug` para ver os detalhes da conexão.
+Use `LOG_LEVEL=debug` to see connection details.
 
-### O que não é suportado (ainda)
+### What is not supported (yet)
 
-- **SASL/OAUTHBEARER (OIDC)** — ex.: Confluent Cloud com OAuth, Event Hubs com Entra ID. Use API key/connection string.
+- **SASL/OAUTHBEARER (OIDC)** — e.g., Confluent Cloud with OAuth, Event Hubs with Entra ID. Use an API key/connection string.
 - **SASL/GSSAPI (Kerberos)**.
-- **Schema Registry** (Avro/Protobuf) — mensagens binárias aparecem em base64.
-- **Vários clusters** na mesma instância — rode uma instância por cluster.
+- **Schema Registry** (Avro/Protobuf) — binary messages appear as base64.
+- **Multiple clusters** in the same instance — run one instance per cluster.
 
-### Diagnóstico de conexão
+### Connection diagnostics
 
-O log de inicialização mostra o erro real do Kafka. Os mais comuns:
+The startup log shows the real Kafka error. The most common ones:
 
-| Sintoma no log | Causa provável |
+| Symptom in the log | Likely cause |
 |---|---|
-| `dial tcp ...: i/o timeout` | Rede: VPN, security group/firewall, ou **porta errada para o tipo de auth** (o app avisa quando detecta isso no MSK) |
-| `connection refused` | Host/porta errados ou broker fora do ar |
-| `x509: certificate signed by unknown authority` | CA privada → `KAFKA_TLS_CA_FILE` |
-| `SASL_AUTHENTICATION_FAILED` / `ILLEGAL_SASL_STATE` | Usuário/senha, mecanismo (`scram-sha-256` × `512`) ou chave AWS errados |
-| `TOPIC_AUTHORIZATION_FAILED` / `CLUSTER_AUTHORIZATION_FAILED` | Falta permissão IAM/ACL |
-| `broker closed the connection immediately after a dial, which often happens if the client is using TLS when the broker is not expecting it` | TLS ligado num listener sem TLS → `KAFKA_TLS=false` (ou porta errada) |
-| `tls: first record does not look like a TLS handshake` | O inverso: listener com TLS e `KAFKA_TLS=false` |
-| `KAFKA_TLS_CA_FILE ...: no PEM certificates found` | Arquivo não é PEM (converta DER/PKCS#12 com `openssl`) |
+| `dial tcp ...: i/o timeout` | Network: VPN, security group/firewall, or **wrong port for the auth type** (the app warns when it detects this on MSK) |
+| `connection refused` | Wrong host/port, or broker is down |
+| `x509: certificate signed by unknown authority` | Private CA → `KAFKA_TLS_CA_FILE` |
+| `SASL_AUTHENTICATION_FAILED` / `ILLEGAL_SASL_STATE` | Wrong username/password, mechanism (`scram-sha-256` × `512`), or AWS key |
+| `TOPIC_AUTHORIZATION_FAILED` / `CLUSTER_AUTHORIZATION_FAILED` | Missing IAM/ACL permission |
+| `broker closed the connection immediately after a dial, which often happens if the client is using TLS when the broker is not expecting it` | TLS enabled on a listener without TLS → `KAFKA_TLS=false` (or wrong port) |
+| `tls: first record does not look like a TLS handshake` | The reverse: listener with TLS and `KAFKA_TLS=false` |
+| `KAFKA_TLS_CA_FILE ...: no PEM certificates found` | File is not PEM (convert DER/PKCS#12 with `openssl`) |
 
-`LOG_LEVEL=debug` mostra todos os passos da conexão.
+`LOG_LEVEL=debug` shows every step of the connection.
 
 ---
 
-## Docker em detalhe
+## Docker in detail
 
-A imagem é **distroless** (sem shell), roda como usuário **não-root** (`65532`), tem ~30 MB, inclui as CAs
-públicas e um `HEALTHCHECK` (`/kafpeek healthcheck`). Arquiteturas: `linux/amd64` e `linux/arm64`.
+The image is **distroless** (no shell), runs as a **non-root** user (`65532`), is ~11 MB and uses ~18–21 MB of RAM when idle or with live tail, includes the public CAs,
+and has a `HEALTHCHECK` (`/kafpeek healthcheck`). Architectures: `linux/amd64` and `linux/arm64`.
 
-### Com arquivo de variáveis
+### With a variables file
 
 ```bash
 docker run -d --name kafpeek -p 127.0.0.1:8090:8090 --env-file kafpeek.env stolato/kafpeek:latest
@@ -367,10 +372,10 @@ docker run -d --name kafpeek -p 127.0.0.1:8090:8090 --env-file kafpeek.env stola
 
 ### AWS MSK IAM
 
-Variáveis, exemplos de `docker run`/env-file para chave de acesso, perfil/SSO e roles (ECS/EKS/EC2), e a
-policy IAM: veja [7) AWS MSK com IAM](#7-aws-msk-com-iam).
+Variables, `docker run`/env-file examples for access keys, profile/SSO, and roles (ECS/EKS/EC2), and the IAM
+policy: see [7) AWS MSK with IAM](#7-aws-msk-with-iam).
 
-### Certificados (CA privada / mTLS)
+### Certificates (private CA / mTLS)
 
 ```bash
 docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
@@ -381,9 +386,9 @@ docker run -d --name kafpeek -p 127.0.0.1:8090:8090 \
   ...
 ```
 
-Os arquivos precisam ser legíveis pelo usuário `65532` (`chmod 644`, ou `644` no cert e `640` + grupo na chave).
+The files must be readable by user `65532` (`chmod 644`, or `644` for the cert and `640` + group for the key).
 
-### Docker Compose (produção)
+### Docker Compose (production)
 
 ```yaml
 services:
@@ -393,11 +398,11 @@ services:
     ports:
       - "127.0.0.1:8090:8090"
     env_file: kafpeek.env          # KAFKA_*, UI_USERNAME, UI_PASSWORD...
-    read_only: true                 # o app não escreve em disco
+    read_only: true                 # the app does not write to disk
     security_opt: ["no-new-privileges:true"]
 ```
 
-### Kubernetes (esboço)
+### Kubernetes (sketch)
 
 ```yaml
 apiVersion: apps/v1
@@ -409,7 +414,7 @@ spec:
   template:
     metadata: { labels: { app: kafpeek } }
     spec:
-      serviceAccountName: kafpeek        # com IRSA/Pod Identity para MSK IAM
+      serviceAccountName: kafpeek        # with IRSA/Pod Identity for MSK IAM
       securityContext: { runAsNonRoot: true }
       containers:
         - name: kafpeek
@@ -417,116 +422,116 @@ spec:
           ports: [{ containerPort: 8090 }]
           envFrom: [{ secretRef: { name: kafpeek-env } }]
           env:
-            - { name: ALLOWED_HOSTS, value: "kafpeek.minhaempresa.internal" }
-            - { name: TRUST_PROXY, value: "true" }   # atrás do Ingress
+            - { name: ALLOWED_HOSTS, value: "kafpeek.mycompany.internal" }
+            - { name: TRUST_PROXY, value: "true" }   # behind the Ingress
           readinessProbe: { exec: { command: ["/kafpeek", "healthcheck"] } }
           livenessProbe:  { exec: { command: ["/kafpeek", "healthcheck"] } }
           securityContext: { readOnlyRootFilesystem: true, allowPrivilegeEscalation: false }
 ```
 
-### Expondo na rede
+### Exposing it on the network
 
-Dentro do container o app escuta em `0.0.0.0:8090` (obrigatório para o port mapping funcionar). Quem controla
-a exposição é o mapeamento de porta:
+Inside the container the app listens on `0.0.0.0:8090` (required for the port mapping to work). The port mapping
+controls the exposure:
 
-- `-p 127.0.0.1:8090:8090` → só a própria máquina (recomendado sem login).
-- `-p 8090:8090` → toda a rede. Nesse caso **defina `UI_USERNAME`/`UI_PASSWORD`**, coloque **HTTPS** na frente
-  (load balancer / Ingress / proxy) e liste em `ALLOWED_HOSTS` o hostname usado para acessar — hosts não
-  listados recebem 403 (proteção contra DNS rebinding).
+- `-p 127.0.0.1:8090:8090` → only the local machine (recommended without login).
+- `-p 8090:8090` → the entire network. In that case **set `UI_USERNAME`/`UI_PASSWORD`**, put **HTTPS** in front
+  (load balancer / Ingress / proxy), and list the hostname you use to access it in `ALLOWED_HOSTS` — unlisted hosts
+  get a 403 (DNS rebinding protection).
 
-### Gerando e publicando a imagem
+### Building and publishing the image
 
 ```bash
-make image                                   # imagem local (docker ou podman, detectado)
-make image-push IMAGE=registry.exemplo.com/kafpeek   # multi-arch (amd64+arm64), requer Docker com buildx
+make image                                   # local image (docker or podman, auto-detected)
+make image-push IMAGE=registry.example.com/kafpeek   # multi-arch (amd64+arm64), requires Docker with buildx
 ```
 
-A versão vem do arquivo `VERSION`; o commit e a data do build entram automaticamente.
+The version comes from the `VERSION` file; the commit and build date are included automatically.
 
-**Releases oficiais** são publicadas pelo GitHub Actions ([`release.yml`](.github/workflows/release.yml)):
-ao enviar uma tag `vX.Y.Z` igual ao arquivo `VERSION`, os testes rodam e a imagem multi-arch vai para o
-Docker Hub e o GHCR com as tags `X.Y.Z`, `X.Y` e `latest`.
+**Official releases** are published by GitHub Actions ([`release.yml`](.github/workflows/release.yml)):
+when you push a `vX.Y.Z` tag that matches the `VERSION` file, the tests run and the multi-arch image is pushed to
+Docker Hub and GHCR with the tags `X.Y.Z`, `X.Y`, and `latest`.
 
 ```bash
 echo 0.2.0 > VERSION && git commit -am "Release v0.2.0"
 git tag -a v0.2.0 -m "kafpeek v0.2.0" && git push origin main v0.2.0
 ```
-`docker run --rm <imagem> version` mostra a versão embutida.
+`docker run --rm <image> version` shows the embedded version.
 
 ---
 
-## Referência de variáveis de ambiente
+## Environment variable reference
 
-Fora do Docker, o app também lê um arquivo `.env` no diretório atual (variáveis reais têm prioridade).
-Modelo completo em [`.env.example`](.env.example).
+Outside Docker, the app also reads a `.env` file in the current directory (real environment variables take priority).
+Full template in [`.env.example`](.env.example).
 
 **Kafka**
 
-| Variável | Padrão | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `KAFKA_BROKERS` | `localhost:9092` | Brokers `host:porta`, separados por vírgula |
-| `KAFKA_CLUSTER_NAME` | `default` | Nome exibido na UI. Contendo `prod`, o Produce pede confirmação extra |
+| `KAFKA_BROKERS` | `localhost:9092` | Brokers as `host:port`, comma-separated |
+| `KAFKA_CLUSTER_NAME` | `default` | Name shown in the UI. If it contains `prod`, Produce asks for extra confirmation |
 | `KAFKA_AUTH` | `none` | `none`, `plain`, `scram-sha-256`, `scram-sha-512`, `aws-iam` |
-| `KAFKA_USERNAME` / `KAFKA_PASSWORD` | — | Credenciais para `plain` e `scram-*` |
-| `KAFKA_TLS` | automático | `true` se houver SASL ou certificados; senão `false` |
-| `KAFKA_TLS_CA_FILE` | — | CA(s) PEM extra(s) para validar o broker |
-| `KAFKA_TLS_CERT_FILE` / `KAFKA_TLS_KEY_FILE` | — | Certificado e chave PEM do cliente (mTLS) |
-| `KAFKA_TLS_SERVER_NAME` | host do broker | Nome para SNI/validação do certificado |
-| `KAFKA_TLS_INSECURE_SKIP_VERIFY` | `false` | Desliga a validação do certificado (só testes) |
-| `KAFKA_READ_ONLY` | `false` | Desliga toda escrita (Produce) |
+| `KAFKA_USERNAME` / `KAFKA_PASSWORD` | — | Credentials for `plain` and `scram-*` |
+| `KAFKA_TLS` | automatic | `true` if SASL or certificates are set; otherwise `false` |
+| `KAFKA_TLS_CA_FILE` | — | Extra PEM CA(s) to validate the broker |
+| `KAFKA_TLS_CERT_FILE` / `KAFKA_TLS_KEY_FILE` | — | Client PEM certificate and key (mTLS) |
+| `KAFKA_TLS_SERVER_NAME` | broker host | Name for SNI/certificate validation |
+| `KAFKA_TLS_INSECURE_SKIP_VERIFY` | `false` | Disables certificate validation (testing only) |
+| `KAFKA_READ_ONLY` | `false` | Disables all writes (Produce) |
 
-**AWS (para `aws-iam`)**: veja [7) AWS MSK com IAM](#7-aws-msk-com-iam) para quais usar em cada caso.
+**AWS (for `aws-iam`)**: see [7) AWS MSK with IAM](#7-aws-msk-with-iam) for which ones to use in each case.
 
-| Variável | Descrição |
+| Variable | Description |
 |---|---|
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Chave de acesso |
-| `AWS_SESSION_TOKEN` | Só para credenciais temporárias (STS) |
-| `AWS_PROFILE` | Perfil de `~/.aws` (SSO, `role_arn`...) |
-| `AWS_CONFIG_FILE` / `AWS_SHARED_CREDENTIALS_FILE` | Caminhos alternativos para `~/.aws/config` / `credentials` |
-| `AWS_ROLE_ARN` + `AWS_WEB_IDENTITY_TOKEN_FILE` | Web identity (IRSA); o EKS preenche sozinho |
-| `AWS_REGION` | Opcional: a região de assinatura vem do hostname do broker |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Access key |
+| `AWS_SESSION_TOKEN` | Only for temporary (STS) credentials |
+| `AWS_PROFILE` | Profile from `~/.aws` (SSO, `role_arn`...) |
+| `AWS_CONFIG_FILE` / `AWS_SHARED_CREDENTIALS_FILE` | Alternative paths for `~/.aws/config` / `credentials` |
+| `AWS_ROLE_ARN` + `AWS_WEB_IDENTITY_TOKEN_FILE` | Web identity (IRSA); EKS fills these in automatically |
+| `AWS_REGION` | Fallback signing region, used only when the broker hostname doesn't contain the region (standard MSK hostnames don't need it). `AWS_DEFAULT_REGION` is also accepted |
 
-ECS, EKS e EC2 fornecem credenciais pela role da plataforma, sem variáveis.
+ECS, EKS, and EC2 provide credentials through the platform role, with no variables.
 
-**Servidor / segurança**
+**Server / security**
 
-| Variável | Padrão | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `HTTP_ADDR` | `127.0.0.1:8090` (binário) / `0.0.0.0:8090` (imagem) | Endereço de escuta |
-| `UI_USERNAME` / `UI_PASSWORD` | — | Ativam o login (as duas são obrigatórias juntas) |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Hosts extras aceitos (hostname/IP de acesso). `*` desliga a verificação |
-| `TRUST_PROXY` | `false` | Usa `X-Forwarded-For` para o IP do cliente (só atrás de proxy) |
-| `LOG_LEVEL` | `info` | `debug` para detalhes de conexão |
+| `HTTP_ADDR` | `127.0.0.1:8090` (binary) / `0.0.0.0:8090` (image) | Listen address |
+| `UI_USERNAME` / `UI_PASSWORD` | — | Enable login (both are required together) |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Extra accepted hosts (hostname/IP used to access it). `*` disables the check |
+| `TRUST_PROXY` | `false` | Uses `X-Forwarded-For` for the client IP (only behind a proxy) |
+| `LOG_LEVEL` | `info` | `debug` for connection details |
 
 ---
 
-## Segurança e login
+## Security and login
 
 ```env
 UI_USERNAME=admin
-UI_PASSWORD=uma-senha-forte
+UI_PASSWORD=a-strong-password
 ```
 
-- Login por **HTTP Basic Auth** em todas as rotas (UI, API e streams). Sem as duas variáveis, a UI fica aberta
-  (o log avisa); com só uma, o app não sobe. Senha errada responde com atraso (anti força bruta).
-  Não há logout — feche o navegador.
-- **Basic Auth envia a senha a cada requisição**: fora de localhost/VPN, use HTTPS na frente.
-- Escritas (Produce) exigem `Content-Type: application/json` e são **bloqueadas quando vêm de outro site** (CSRF).
-- Hosts desconhecidos recebem 403 (**DNS rebinding**) — configure `ALLOWED_HOSTS`.
-- Headers: CSP restritiva (sem JS inline, sem iframe), `nosniff`, `no-referrer`; respostas da API com `no-store`.
-- `KAFKA_READ_ONLY=true` é recomendado em instalações compartilhadas.
+- Login via **HTTP Basic Auth** on all routes (UI, API, and streams). Without both variables, the UI is open
+  (the log warns about it); with only one, the app won't start. A wrong password gets a delayed response (brute-force protection).
+  There is no logout — close the browser.
+- **Basic Auth sends the password on every request**: outside localhost/VPN, use HTTPS in front.
+- Writes (Produce) require `Content-Type: application/json` and are **blocked when they come from another site** (CSRF).
+- Unknown hosts get a 403 (**DNS rebinding**) — configure `ALLOWED_HOSTS`.
+- Headers: strict CSP (no inline JS, no iframes), `nosniff`, `no-referrer`; API responses use `no-store`.
+- `KAFKA_READ_ONLY=true` is recommended on shared installations.
 
 ---
 
-## Filtros (CEL)
+## Filters (CEL)
 
-Os filtros rodam **no servidor** com [CEL](https://cel.dev). Só as mensagens que casam chegam ao navegador.
-Funcionam na aba Messages e na aba Live e ficam na URL (`?filter=`), então dá para compartilhar por link.
+Filters run **on the server** with [CEL](https://cel.dev). Only matching messages reach the browser.
+They work in the Messages and Live tabs and are kept in the URL (`?filter=`), so you can share them as a link.
 
-| Variável | Tipo | |
+| Variable | Type | |
 |---|---|---|
-| `json` | dyn | value parseado como JSON (`null` se não for JSON) |
-| `value` / `key` | string | conteúdo bruto (base64 se for binário) |
+| `json` | dyn | value parsed as JSON (`null` if it isn't JSON) |
+| `value` / `key` | string | raw content (base64 if binary) |
 | `headers` | map(string,string) | `headers["tenant"]` |
 | `partition`, `offset`, `size` | int | |
 | `timestamp` | timestamp | |
@@ -539,90 +544,90 @@ json.items.exists(i, i.qty > 10)
 timestamp > timestamp("2026-11-19T17:00:00Z")
 ```
 
-Na aba **Messages** a busca é em **streaming**: resultados aparecem enquanto o servidor varre, com barra de
-progresso real e botão **Stop** (mantém o que já foi encontrado). Alcances: **Newest** (N mais recentes),
-**Time range** (de/até, atalhos 15 min / 1 h / 6 h / 24 h) e **Entire topic** (só roda ao clicar em Search).
-Limite de até 10.000 resultados por busca; máximo de 4 buscas simultâneas no servidor.
+In the **Messages** tab, search is **streaming**: results appear while the server scans, with a real progress bar and a
+**Stop** button (keeps what has already been found). Scopes: **Newest** (the N most recent), **Time range** (from/to,
+shortcuts 15 min / 1 h / 6 h / 24 h), and **Entire topic** (only runs when you click Search).
+Up to 10,000 results per search; a maximum of 4 concurrent searches on the server.
 
-Uma expressão que dá erro numa mensagem (ex.: campo JSON ausente) conta como "não casou". No Live, clientes com
-filtros diferentes compartilham um único consumer e cada expressão distinta é avaliada uma vez por mensagem.
-
----
-
-## Produzindo mensagens
-
-Botão **Produce** no tópico (ou **Produce copy** numa mensagem, para reprocessá-la): key, value (JSON validado ou
-texto), headers, partição automática (mesmo hash do cliente Java) ou fixa, tombstone (`null`).
-Clusters com `prod` no nome exigem confirmação a cada abertura. Desative tudo com `KAFKA_READ_ONLY=true`.
-No MSK IAM é preciso `kafka-cluster:WriteData`.
+An expression that errors on a message (e.g., a missing JSON field) counts as "no match". In Live, clients with
+different filters share a single consumer, and each distinct expression is evaluated once per message.
 
 ---
 
-## Desenvolvimento
+## Producing messages
+
+**Produce** button on a topic (or **Produce copy** on a message, to reprocess it): key, value (validated JSON or
+text), headers, automatic partition (same hash as the Java client) or a fixed one, tombstone (`null`).
+Clusters with `prod` in the name require confirmation every time the form is opened. Disable everything with `KAFKA_READ_ONLY=true`.
+With MSK IAM, `kafka-cluster:WriteData` is required.
+
+---
+
+## Development
 
 ```bash
 cp .env.example .env
-make kafka-up      # Kafka local (KRaft) via docker/podman compose
-make seed          # outro terminal: tópicos de exemplo + eventos fake (só local)
-make run           # API em http://localhost:8090
-make web-dev       # outro terminal: Angular com hot reload em http://localhost:4200
-make build         # bin/kafpeek com a UI embutida
-make demo          # Kafka + kafpeek em containers
+make kafka-up      # local Kafka (KRaft) via docker/podman compose
+make seed          # another terminal: sample topics + fake events (local only)
+make run           # API at http://localhost:8090
+make web-dev       # another terminal: Angular with hot reload at http://localhost:4200
+make build         # bin/kafpeek with the UI embedded
+make demo          # Kafka + kafpeek in containers
 ```
 
-Testes: `go test -race ./internal/...`
+Tests: `go test -race ./internal/...`
 
 ---
 
 ## API
 
-| Método | Rota | Descrição |
+| Method | Route | Description |
 |---|---|---|
-| GET | `/api/health` | status, cluster, read-only e versão |
+| GET | `/api/health` | status, cluster, read-only, and version |
 | GET | `/api/cluster` | cluster ID, controller, brokers |
-| GET | `/api/topics` | tópicos com partições, RF, mensagens (aprox.) e saúde |
-| GET | `/api/topics/{name}` | partições, offsets e configs |
-| GET | `/api/topics/{name}/messages?limit=100&partition=0` | últimas N mensagens |
-| GET | `/api/topics/{name}/search?filter=<CEL>&mode=newest\|range\|all&scan=N&from=&to=&limit=N` | **SSE**: busca em streaming (`start`, `batch`, `done`, `failure`); fechar a conexão cancela a varredura |
-| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: tempo real (`ready`, `batch`, `failure`) |
-| POST | `/api/topics/{name}/messages` | produz uma mensagem `{key, value, headers, partition?}` (403 em read-only) |
-| GET | `/api/filter/validate?expr=<CEL>` | valida a expressão: `200` ou `400 {"error","column"}` |
-| GET | `/api/consumer-groups` | grupos com lag total |
-| GET | `/api/consumer-groups/{name}` | lag por partição |
-| GET | `/api/streams` | streams ao vivo ativos |
+| GET | `/api/topics` | topics with partitions, RF, messages (approx.), and health |
+| GET | `/api/topics/{name}` | partitions, offsets, and configs |
+| GET | `/api/topics/{name}/messages?limit=100&partition=0` | last N messages |
+| GET | `/api/topics/{name}/search?filter=<CEL>&mode=newest\|range\|all&scan=N&from=&to=&limit=N` | **SSE**: streaming search (`start`, `batch`, `done`, `failure`); closing the connection cancels the scan |
+| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: real time (`ready`, `batch`, `failure`) |
+| POST | `/api/topics/{name}/messages` | produces a message `{key, value, headers, partition?}` (403 in read-only) |
+| GET | `/api/filter/validate?expr=<CEL>` | validates the expression: `200` or `400 {"error","column"}` |
+| GET | `/api/consumer-groups` | groups with total lag |
+| GET | `/api/consumer-groups/{name}` | lag per partition |
+| GET | `/api/streams` | active live streams |
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```
-cmd/kafpeek        entrypoint (config, servidor HTTP, healthcheck, graceful shutdown)
-cmd/seed           gerador de dados de teste (só para o Kafka local)
-internal/config    configuração via env/.env
-internal/kafka     fachada sobre franz-go (kgo/kadm): conexão/TLS/SASL, leitura, busca, produce
-internal/filter    compilação/avaliação de filtros CEL
-internal/stream    hub de tempo real: 1 consumer por tópico → N clientes, com backpressure
-internal/api       rotas chi, REST + SSE, segurança (auth, CSRF, hosts, headers)
-internal/version   versão/commit/data embutidos no build
-web/               Angular (embutido via embed.FS a partir de web/dist)
+cmd/kafpeek        entrypoint (config, HTTP server, healthcheck, graceful shutdown)
+cmd/seed           test data generator (local Kafka only)
+internal/config    configuration via env/.env
+internal/kafka     facade over franz-go (kgo/kadm): connection/TLS/SASL, reads, search, produce
+internal/filter    CEL filter compilation/evaluation
+internal/stream    real-time hub: 1 consumer per topic → N clients, with backpressure
+internal/api       chi routes, REST + SSE, security (auth, CSRF, hosts, headers)
+internal/version   version/commit/date embedded at build time
+web/               Angular (embedded via embed.FS from web/dist)
 ```
 
 ---
 
-## Contribuindo
+## Contributing
 
-Issues e pull requests são bem-vindos. Para mudanças maiores, abra uma issue antes para alinharmos a ideia.
+Issues and pull requests are welcome. For larger changes, open an issue first so we can align on the idea.
 
-1. Faça um fork e crie uma branch (`git checkout -b minha-melhoria`).
-2. Suba o ambiente local (veja [Desenvolvimento](#desenvolvimento)).
-3. Rode os testes: `go test -race ./...` e `cd web && npx ng build`.
-4. Abra o pull request descrevendo o que mudou e como testar.
+1. Fork and create a branch (`git checkout -b my-improvement`).
+2. Set up the local environment (see [Development](#development)).
+3. Run the tests: `go test -race ./...` and `cd web && npx ng build`.
+4. Open a pull request describing what changed and how to test it.
 
 ---
 
-## Licença
+## License
 
-Distribuído sob a licença [MIT](LICENSE).
+Distributed under the [MIT](LICENSE) license.
 
-Apache Kafka é marca registrada da Apache Software Foundation. O kafpeek é um projeto independente, sem
-afiliação com a ASF.
+Apache Kafka is a registered trademark of the Apache Software Foundation. kafpeek is an independent project, not
+affiliated with the ASF.
