@@ -1,0 +1,18 @@
+# Never send secrets or local state to the build context
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+.git
+.idea
+.vscode
+bin/
+**/node_modules
+web/dist/app
+web/.angular
+design-system/
+*.local
+docs/
+graphify-out/

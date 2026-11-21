@@ -1,0 +1,52 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.split {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  height: calc(100vh - var(--split-offset, 340px));
+  min-height: 360px;
+  &.with-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 34%);
+  }
+}
+
+/* Narrow screens: details become an overlay drawer instead of a column. */
+@media (max-width: 1100px) {
+  .split.with-detail {
+    grid-template-columns: minmax(0, 1fr);
+    app-message-detail {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(440px, 92%);
+      z-index: 5;
+      box-shadow: var(--shadow-pop);
+    }
+  }
+}
+
+.list-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  app-message-list {
+    flex: 1;
+  }
+}
+
+.hint-keys {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  margin-top: var(--sp-2);
+  kbd {
+    margin: 0 2px;
+  }
+}

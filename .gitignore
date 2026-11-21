@@ -1,0 +1,8 @@
+.env
+/bin/
+*.local
+.idea/
+.DS_Store
+
+# graphify knowledge graph (generated locally, regenerate with /graphify)
+graphify-out/

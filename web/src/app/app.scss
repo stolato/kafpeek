@@ -1,0 +1,215 @@
+:host {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100vh;
+}
+
+app-command-palette,
+app-toast-host {
+  position: absolute;
+}
+
+.skip {
+  position: absolute;
+  left: var(--sp-3);
+  top: -40px;
+  z-index: 200;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  &:focus {
+    top: var(--sp-3);
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-3);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--accent);
+  text-decoration: none !important;
+  .label {
+    font-family: var(--mono);
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    color: var(--text);
+    b {
+      color: var(--accent);
+      font-weight: 700;
+    }
+  }
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 34px;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease);
+  &:hover {
+    border-color: var(--muted);
+    color: var(--text-2);
+  }
+  span.label {
+    flex: 1;
+    text-align: left;
+  }
+}
+
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    height: 36px;
+    padding: 0 var(--sp-3);
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    font-size: var(--fs-md);
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
+    &:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+    &.active {
+      background: var(--selected);
+      color: var(--text);
+      app-icon {
+        color: var(--accent);
+      }
+      &::before {
+        content: '';
+        position: absolute;
+        left: -12px;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: var(--accent);
+      }
+    }
+  }
+}
+
+.cluster {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-width: 0;
+  .dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+  }
+  &[data-state='up'] .dot {
+    background: var(--ok);
+    box-shadow: 0 0 0 3px var(--ok-soft);
+  }
+  &[data-state='down'] .dot {
+    background: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+  }
+  .label {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .name {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sub {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+  .ro {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--info);
+  }
+}
+
+.version {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: calc(-1 * var(--sp-2));
+  font-size: 11px;
+  color: var(--muted);
+  cursor: default;
+}
+
+.content {
+  overflow: auto;
+  padding: var(--sp-5) var(--sp-6);
+  min-width: 0;
+  outline: none;
+}
+
+/* Icon rail on narrower screens */
+@media (max-width: 1000px) {
+  :host {
+    --sidebar-w: 64px;
+  }
+  .sidebar {
+    align-items: center;
+    padding: var(--sp-4) var(--sp-2);
+  }
+  .label {
+    display: none !important;
+  }
+  .search,
+  nav a {
+    justify-content: center;
+    padding: 0;
+    width: 40px;
+  }
+  nav a.active::before {
+    left: -8px;
+  }
+  .cluster {
+    padding: var(--sp-2);
+  }
+  .content {
+    padding: var(--sp-4);
+  }
+}
