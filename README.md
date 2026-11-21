@@ -388,7 +388,7 @@ Os arquivos precisam ser legíveis pelo usuário `65532` (`chmod 644`, ou `644` 
 ```yaml
 services:
   kafpeek:
-    image: stolato/kafpeek:0.1.0
+    image: stolato/kafpeek:0.1.1
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
@@ -413,7 +413,7 @@ spec:
       securityContext: { runAsNonRoot: true }
       containers:
         - name: kafpeek
-          image: stolato/kafpeek:0.1.0
+          image: stolato/kafpeek:0.1.1
           ports: [{ containerPort: 8090 }]
           envFrom: [{ secretRef: { name: kafpeek-env } }]
           env:
