@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,6 +17,36 @@ const (
 	sseMaxBatch   = 500
 	sseHeartbeat  = 15 * time.Second // keeps proxies/load balancers from closing idle streams
 )
+
+// sseStart writes the event-stream headers and returns the two writers shared
+// by the live and search streams. Both are safe for concurrent use.
+func sseStart(w http.ResponseWriter) (send func(event string, v any) error, ping func() error) {
+	rc := http.NewResponseController(w)
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("X-Accel-Buffering", "no") // disable nginx buffering
+	w.WriteHeader(http.StatusOK)
+
+	var mu sync.Mutex
+	write := func(frame string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if _, err := fmt.Fprint(w, frame); err != nil {
+			return err
+		}
+		return rc.Flush()
+	}
+	send = func(event string, v any) error {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return write(fmt.Sprintf("event: %s\ndata: %s\n\n", event, b))
+	}
+	ping = func() error { return write(": ping\n\n") }
+	return send, ping
+}
 
 type liveBatch struct {
 	Messages []kafka.Message `json:"messages"`
@@ -41,24 +72,8 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rc := http.NewResponseController(w)
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("X-Accel-Buffering", "no") // disable nginx buffering
-	w.WriteHeader(http.StatusOK)
-
-	send := func(event string, v any) error {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
-			return err
-		}
-		return rc.Flush()
-	}
+	w.Header().Set("Connection", "keep-alive")
+	send, ping := sseStart(w)
 
 	sub, unsubscribe := s.hub.Subscribe(topic, prog)
 	defer unsubscribe()
@@ -106,7 +121,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil || rc.Flush() != nil {
+			if ping() != nil {
 				return
 			}
 		}

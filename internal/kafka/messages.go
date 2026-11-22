@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -56,28 +57,18 @@ func (c *Client) Browse(ctx context.Context, topic string, opts BrowseOptions) (
 		return res, fmt.Errorf("topic %q: %w", topic, ErrNotFound)
 	}
 
-	// Spread the scan depth evenly over the selected partitions.
-	selected := 0
-	for p := range parts {
-		if opts.Partition == nil || *opts.Partition == p {
-			selected++
-		}
-	}
+	// Spread the scan depth evenly over the partitions that hold records.
+	active := livePartitions(topic, start, end, opts.Partition)
 	depth := int64(opts.Scan)
-	if opts.Match != nil && selected > 0 {
-		depth = int64((opts.Scan + selected - 1) / selected)
+	if opts.Match != nil && len(active) > 0 {
+		depth = int64((opts.Scan + len(active) - 1) / len(active))
 	}
 
 	assign := map[int32]kgo.Offset{}
 	remaining := map[int32]int64{} // partition -> last offset we still expect
-	for p, eo := range parts {
-		if opts.Partition != nil && *opts.Partition != p {
-			continue
-		}
-		so, ok := start.Lookup(topic, p)
-		if eo.Err != nil || !ok || so.Err != nil || eo.Offset <= so.Offset {
-			continue // empty or errored partition
-		}
+	for _, p := range active {
+		so, _ := start.Lookup(topic, p)
+		eo := parts[p]
 		from := max(so.Offset, eo.Offset-depth)
 		assign[p] = kgo.NewOffset().At(from)
 		remaining[p] = eo.Offset - 1
@@ -138,6 +129,23 @@ func (c *Client) Browse(ctx context.Context, topic string, opts BrowseOptions) (
 		res.Messages = msgs
 	}
 	return res, nil
+}
+
+// livePartitions returns the selected partitions that hold at least one
+// record. Empty partitions must not take a share of a newest-records budget.
+func livePartitions(topic string, start, end kadm.ListedOffsets, only *int32) []int32 {
+	var out []int32
+	for p, eo := range end[topic] {
+		if only != nil && *only != p {
+			continue
+		}
+		so, ok := start.Lookup(topic, p)
+		if eo.Err != nil || !ok || so.Err != nil || eo.Offset <= so.Offset {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // newest sorts msgs newest-first and keeps at most n of them. The result is

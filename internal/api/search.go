@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -62,27 +61,8 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rc := http.NewResponseController(w)
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-
-	// One writer at a time: the scan goroutine produces, this goroutine sends.
-	var mu sync.Mutex
-	send := func(event string, v any) error {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
-			return err
-		}
-		return rc.Flush()
-	}
+	// The scan goroutine and this goroutine both send; sseStart serializes them.
+	send, _ := sseStart(w)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -189,15 +169,11 @@ func parseSearchOptions(w http.ResponseWriter, q map[string][]string) (kafka.Sea
 		}
 		opts.Limit = n
 	}
-	if v := get("partition"); v != "" {
-		p, err := strconv.ParseInt(v, 10, 32)
-		if err != nil || p < 0 {
-			badRequest(w, "invalid partition")
-			return opts, false
-		}
-		p32 := int32(p)
-		opts.Partition = &p32
+	part, ok := parsePartition(w, get("partition"))
+	if !ok {
+		return opts, false
 	}
+	opts.Partition = part
 	switch mode := get("mode"); mode {
 	case "", "newest":
 		if v := get("scan"); v != "" {

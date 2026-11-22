@@ -274,12 +274,6 @@ func (c *Client) planSearch(ctx context.Context, topic string, opts SearchOption
 		}
 	}
 
-	selected := 0
-	for p := range ends {
-		if opts.Partition == nil || *opts.Partition == p {
-			selected++
-		}
-	}
 	timeMode := !opts.From.IsZero() || !opts.To.IsZero()
 	depth := int64(0)
 	if !opts.All && !timeMode {
@@ -287,6 +281,7 @@ func (c *Client) planSearch(ctx context.Context, topic string, opts SearchOption
 		if scan <= 0 || scan > MaxScan {
 			scan = 10_000
 		}
+		selected := len(livePartitions(topic, start, end, opts.Partition))
 		depth = int64((scan + selected - 1) / max(selected, 1))
 	}
 

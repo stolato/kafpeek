@@ -58,15 +58,11 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.Limit = n
 	}
-	if v := q.Get("partition"); v != "" {
-		p, err := strconv.ParseInt(v, 10, 32)
-		if err != nil || p < 0 {
-			badRequest(w, "invalid partition")
-			return
-		}
-		p32 := int32(p)
-		opts.Partition = &p32
+	part, ok := parsePartition(w, q.Get("partition"))
+	if !ok {
+		return
 	}
+	opts.Partition = part
 	prog, ok := compileFilter(w, q.Get("filter"))
 	if !ok {
 		return
@@ -141,6 +137,21 @@ func (s *Server) validateFilter(w http.ResponseWriter, r *http.Request) {
 	if _, ok := compileFilter(w, r.URL.Query().Get("expr")); ok {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
+}
+
+// parsePartition returns nil for an empty value (all partitions). It writes a
+// 400 and returns false when the value is not a valid partition number.
+func parsePartition(w http.ResponseWriter, v string) (*int32, bool) {
+	if v == "" {
+		return nil, true
+	}
+	p, err := strconv.ParseInt(v, 10, 32)
+	if err != nil || p < 0 {
+		badRequest(w, "invalid partition")
+		return nil, false
+	}
+	p32 := int32(p)
+	return &p32, true
 }
 
 // compileFilter writes a 400 with the error position when expr is invalid.

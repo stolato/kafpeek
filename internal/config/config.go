@@ -3,6 +3,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -74,22 +75,30 @@ func Load() (Config, error) {
 	_ = godotenv.Load() // missing .env is fine
 
 	auth := AuthMode(strings.ToLower(env("KAFKA_AUTH", string(AuthNone))))
+	var errs []error
+	eb := func(key string, def bool) bool {
+		b, err := envBool(key, def)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		return b
+	}
 	cfg := Config{
 		// Loopback by default: exposing the UI to the network is an explicit choice.
 		HTTPAddr:     env("HTTP_ADDR", "127.0.0.1:8090"),
 		AllowedHosts: splitList(os.Getenv("ALLOWED_HOSTS")),
-		TrustProxy:   envBool("TRUST_PROXY", false),
+		TrustProxy:   eb("TRUST_PROXY", false),
 		UIUsername:   os.Getenv("UI_USERNAME"),
 		UIPassword:   os.Getenv("UI_PASSWORD"),
 		Kafka: Kafka{
 			ClusterName: env("KAFKA_CLUSTER_NAME", "default"),
-			ReadOnly:    envBool("KAFKA_READ_ONLY", false),
+			ReadOnly:    eb("KAFKA_READ_ONLY", false),
 			Brokers:     splitList(env("KAFKA_BROKERS", "localhost:9092")),
 			Auth:        auth,
 			// TLS defaults to on for any SASL mechanism or when certificates are given.
-			TLS: envBool("KAFKA_TLS", auth != AuthNone ||
+			TLS: eb("KAFKA_TLS", auth != AuthNone ||
 				os.Getenv("KAFKA_TLS_CA_FILE") != "" || os.Getenv("KAFKA_TLS_CERT_FILE") != ""),
-			TLSInsecureSkipVerify: envBool("KAFKA_TLS_INSECURE_SKIP_VERIFY", false),
+			TLSInsecureSkipVerify: eb("KAFKA_TLS_INSECURE_SKIP_VERIFY", false),
 			TLSCAFile:             os.Getenv("KAFKA_TLS_CA_FILE"),
 			TLSCertFile:           os.Getenv("KAFKA_TLS_CERT_FILE"),
 			TLSKeyFile:            os.Getenv("KAFKA_TLS_KEY_FILE"),
@@ -98,6 +107,9 @@ func Load() (Config, error) {
 			Password:              os.Getenv("KAFKA_PASSWORD"),
 			AWSProfile:            os.Getenv("AWS_PROFILE"),
 		},
+	}
+	if err := errors.Join(errs...); err != nil {
+		return cfg, err
 	}
 	return cfg, cfg.validate()
 }
@@ -132,16 +144,18 @@ func env(key, def string) string {
 	return def
 }
 
-func envBool(key string, def bool) bool {
+// envBool fails on an unrecognized value instead of falling back to the
+// default: a typo in KAFKA_READ_ONLY=yes must not silently allow writes.
+func envBool(key string, def bool) (bool, error) {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
-		return def
+		return def, nil
 	}
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		return def
+		return def, fmt.Errorf("%s=%q is not a boolean (use true or false)", key, v)
 	}
-	return b
+	return b, nil
 }
 
 func splitList(s string) []string {
