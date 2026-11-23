@@ -400,7 +400,7 @@ Os arquivos precisam ser legíveis pelo usuário `65532` (`chmod 644`, ou `644` 
 ```yaml
 services:
   kafpeek:
-    image: stolato/kafpeek:0.2.0
+    image: stolato/kafpeek:0.2.1
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
@@ -425,7 +425,7 @@ spec:
       securityContext: { runAsNonRoot: true }
       containers:
         - name: kafpeek
-          image: stolato/kafpeek:0.2.0
+          image: stolato/kafpeek:0.2.1
           ports: [{ containerPort: 8090 }]
           envFrom: [{ secretRef: { name: kafpeek-env } }]
           env:
@@ -460,8 +460,8 @@ ao enviar uma tag `vX.Y.Z` igual ao arquivo `VERSION`, os testes rodam e a image
 Docker Hub e o GHCR com as tags `X.Y.Z`, `X.Y` e `latest`.
 
 ```bash
-echo 0.2.0 > VERSION && git commit -am "Release v0.2.0"
-git tag -a v0.2.0 -m "kafpeek v0.2.0" && git push origin main v0.2.0
+echo 0.2.1 > VERSION && git commit -am "Release v0.2.1"
+git tag -a v0.2.1 -m "kafpeek v0.2.1" && git push origin main v0.2.1
 ```
 `docker run --rm <imagem> version` mostra a versão embutida.
 

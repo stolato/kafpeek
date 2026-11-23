@@ -399,7 +399,7 @@ The files must be readable by user `65532` (`chmod 644`, or `644` for the cert a
 ```yaml
 services:
   kafpeek:
-    image: stolato/kafpeek:0.2.0
+    image: stolato/kafpeek:0.2.1
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
@@ -424,7 +424,7 @@ spec:
       securityContext: { runAsNonRoot: true }
       containers:
         - name: kafpeek
-          image: stolato/kafpeek:0.2.0
+          image: stolato/kafpeek:0.2.1
           ports: [{ containerPort: 8090 }]
           envFrom: [{ secretRef: { name: kafpeek-env } }]
           env:
@@ -459,8 +459,8 @@ when you push a `vX.Y.Z` tag that matches the `VERSION` file, the tests run and 
 Docker Hub and GHCR with the tags `X.Y.Z`, `X.Y`, and `latest`.
 
 ```bash
-echo 0.2.0 > VERSION && git commit -am "Release v0.2.0"
-git tag -a v0.2.0 -m "kafpeek v0.2.0" && git push origin main v0.2.0
+echo 0.2.1 > VERSION && git commit -am "Release v0.2.1"
+git tag -a v0.2.1 -m "kafpeek v0.2.1" && git push origin main v0.2.1
 ```
 `docker run --rm <image> version` shows the embedded version.
 
