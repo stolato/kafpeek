@@ -34,8 +34,19 @@ type Config struct {
 	AllowedHosts []string
 	// TrustProxy makes the server use X-Forwarded-For / X-Real-IP for the
 	// client address. Only enable behind a proxy that sets them.
-	TrustProxy bool
-	Kafka      Kafka
+	TrustProxy     bool
+	Kafka          Kafka
+	SchemaRegistry SchemaRegistry
+}
+
+// SchemaRegistry configures decoding of Avro/Protobuf/JSON Schema messages
+// through a Confluent-compatible registry. Disabled when URL is empty.
+type SchemaRegistry struct {
+	URL                   string
+	Username              string
+	Password              string
+	TLSCAFile             string
+	TLSInsecureSkipVerify bool
 }
 
 // AuthEnabled reports whether the UI requires a login.
@@ -107,6 +118,13 @@ func Load() (Config, error) {
 			Password:              os.Getenv("KAFKA_PASSWORD"),
 			AWSProfile:            os.Getenv("AWS_PROFILE"),
 		},
+		SchemaRegistry: SchemaRegistry{
+			URL:                   strings.TrimSpace(os.Getenv("SCHEMA_REGISTRY_URL")),
+			Username:              os.Getenv("SCHEMA_REGISTRY_USERNAME"),
+			Password:              os.Getenv("SCHEMA_REGISTRY_PASSWORD"),
+			TLSCAFile:             os.Getenv("SCHEMA_REGISTRY_TLS_CA_FILE"),
+			TLSInsecureSkipVerify: eb("SCHEMA_REGISTRY_TLS_INSECURE_SKIP_VERIFY", false),
+		},
 	}
 	if err := errors.Join(errs...); err != nil {
 		return cfg, err
@@ -121,6 +139,12 @@ func (c Config) validate() error {
 	}
 	if strings.Contains(c.UIUsername, ":") {
 		return fmt.Errorf("UI_USERNAME cannot contain ':' (not allowed by HTTP Basic auth)")
+	}
+	if (c.SchemaRegistry.Username == "") != (c.SchemaRegistry.Password == "") {
+		return fmt.Errorf("set both SCHEMA_REGISTRY_USERNAME and SCHEMA_REGISTRY_PASSWORD (or neither)")
+	}
+	if c.SchemaRegistry.URL == "" && c.SchemaRegistry.Username != "" {
+		return fmt.Errorf("SCHEMA_REGISTRY_USERNAME is set but SCHEMA_REGISTRY_URL is empty")
 	}
 	if len(c.Kafka.Brokers) == 0 {
 		return fmt.Errorf("KAFKA_BROKERS is empty")

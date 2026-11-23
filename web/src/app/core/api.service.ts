@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { BrowseResult, LiveEvent, ProduceRequest, ProduceResult, SearchEvent, SearchParams } from './models';
+import { BrowseResult, CreateTopicRequest, CreateTopicResult, PurgeResult, ResetOffsetsRequest, ResetOffsetsResult, TopicConfigChange, LiveEvent, ProduceRequest, ProduceResult, SearchEvent, SearchParams } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -15,6 +15,31 @@ export class ApiService {
       if (opts.scan) params = params.set('scan', opts.scan);
     }
     return this.http.get<BrowseResult>(`/api/topics/${encodeURIComponent(topic)}/messages`, { params });
+  }
+
+  createTopic(req: CreateTopicRequest): Observable<CreateTopicResult> {
+    return this.http.post<CreateTopicResult>('/api/topics', req);
+  }
+
+  deleteTopic(name: string): Observable<void> {
+    return this.http.delete<void>(`/api/topics/${encodeURIComponent(name)}`, { body: { confirm: name } });
+  }
+
+  setPartitions(name: string, count: number): Observable<{ partitions: number }> {
+    return this.http.post<{ partitions: number }>(`/api/topics/${encodeURIComponent(name)}/partitions`, { count });
+  }
+
+  alterTopicConfigs(name: string, change: TopicConfigChange): Observable<void> {
+    return this.http.patch<void>(`/api/topics/${encodeURIComponent(name)}/configs`, change);
+  }
+
+  /** Deletes all records in the given partitions (all when omitted). */
+  purgeTopic(name: string, partitions?: number[]): Observable<PurgeResult> {
+    return this.http.post<PurgeResult>(`/api/topics/${encodeURIComponent(name)}/purge`, { confirm: name, ...(partitions ? { partitions } : {}) });
+  }
+
+  resetOffsets(group: string, req: ResetOffsetsRequest): Observable<ResetOffsetsResult> {
+    return this.http.post<ResetOffsetsResult>(`/api/consumer-groups/${encodeURIComponent(group)}/reset-offsets`, req);
   }
 
   produce(topic: string, req: ProduceRequest): Observable<ProduceResult> {

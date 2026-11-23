@@ -61,11 +61,17 @@ func NewRouter(kc *kafka.Client, hub *stream.Hub, log *slog.Logger, ui fs.FS, op
 			r.Get("/health", s.health)
 			r.Get("/cluster", s.cluster)
 			r.Get("/topics", s.topics)
+			r.Post("/topics", s.createTopic)
 			r.Get("/topics/{name}", s.topic)
+			r.Delete("/topics/{name}", s.deleteTopic)
+			r.Post("/topics/{name}/partitions", s.setPartitions)
+			r.Patch("/topics/{name}/configs", s.alterTopicConfigs)
+			r.Post("/topics/{name}/purge", s.purgeTopic)
 			r.Get("/topics/{name}/messages", s.messages)
 			r.Post("/topics/{name}/messages", s.produce)
 			r.Get("/consumer-groups", s.groups)
 			r.Get("/consumer-groups/{name}", s.group)
+			r.Post("/consumer-groups/{name}/reset-offsets", s.resetOffsets)
 			r.Get("/streams", s.streams)
 			r.Get("/filter/validate", s.validateFilter)
 		})
@@ -88,8 +94,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func (s *Server) writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	status := http.StatusBadGateway // most failures come from the Kafka cluster
-	if errors.Is(err, kafka.ErrNotFound) {
+	switch {
+	case errors.Is(err, kafka.ErrNotFound):
 		status = http.StatusNotFound
+	case errors.Is(err, kafka.ErrInvalid):
+		status = http.StatusBadRequest
+	case errors.Is(err, kafka.ErrConflict):
+		status = http.StatusConflict
+	case errors.Is(err, kafka.ErrForbidden), errors.Is(err, kafka.ErrReadOnly):
+		status = http.StatusForbidden
 	}
 	s.log.Warn("request failed", "path", r.URL.Path, "status", status, "err", err)
 	writeJSON(w, status, map[string]string{"error": err.Error()})
@@ -110,6 +123,16 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
+// assetExts are the file types the Angular build emits. Other dotted paths
+// (e.g. /topics/orders.created.v1) are client-side routes.
+var assetExts = map[string]bool{
+	".js": true, ".mjs": true, ".css": true, ".map": true, ".html": true, ".json": true, ".txt": true,
+	".ico": true, ".png": true, ".svg": true, ".jpg": true, ".webp": true, ".webmanifest": true,
+	".woff": true, ".woff2": true, ".ttf": true,
+}
+
+func isAsset(p string) bool { return assetExts[strings.ToLower(path.Ext(p))] }
+
 // spaHandler serves the Angular build and falls back to index.html so
 // client-side routes (e.g. /topics/orders) work on reload.
 func spaHandler(ui fs.FS) http.Handler {
@@ -127,7 +150,7 @@ func spaHandler(ui fs.FS) http.Handler {
 			p = "index.html"
 		}
 		if _, err := fs.Stat(ui, p); err != nil {
-			if path.Ext(p) != "" { // missing asset: real 404
+			if isAsset(p) { // missing asset: real 404 (topic names like orders.v1 are routes)
 				http.NotFound(w, r)
 				return
 			}

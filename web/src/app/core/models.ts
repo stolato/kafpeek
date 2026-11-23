@@ -84,6 +84,8 @@ export interface KafkaMessage {
   valueEncoding?: 'utf8' | 'base64';
   valueSize: number;
   truncated?: boolean;
+  keySchema?: SchemaRef;
+  valueSchema?: SchemaRef;
 }
 
 export interface ProduceRequest {
@@ -100,6 +102,65 @@ export interface ProduceResult {
   timestamp: string;
 }
 
+export interface CreateTopicRequest {
+  name: string;
+  /** Omitted = broker default (num.partitions). */
+  partitions?: number;
+  /** Omitted = broker default (default.replication.factor). */
+  replicationFactor?: number;
+  configs?: Record<string, string>;
+}
+
+export interface CreateTopicResult {
+  name: string;
+  id?: string;
+  partitions: number;
+  replicationFactor: number;
+}
+
+export interface TopicConfigChange {
+  set?: Record<string, string>;
+  reset?: string[];
+}
+
+export interface PurgeResult {
+  partitions: number;
+  deleted: number;
+}
+
+export type ResetStrategy = 'earliest' | 'latest' | 'timestamp' | 'offset' | 'shift';
+
+export interface ResetOffsetsRequest {
+  topic: string;
+  partitions?: number[];
+  to: ResetStrategy;
+  timestamp?: number;
+  offset?: number;
+  dryRun: boolean;
+}
+
+export interface OffsetChange {
+  partition: number;
+  /** Shift across all partitions: no commit to shift from, left unchanged. */
+  skipped?: boolean;
+  current: number;
+  target: number;
+  start: number;
+  end: number;
+  lagBefore: number;
+  lagAfter: number;
+}
+
+export interface ResetOffsetsResult {
+  group: string;
+  topic: string;
+  state: string;
+  members: number;
+  active: boolean;
+  applied: boolean;
+  changes: OffsetChange[];
+}
+
 export interface BuildInfo {
   version: string;
   commit?: string;
@@ -107,10 +168,18 @@ export interface BuildInfo {
   dirty?: boolean;
 }
 
+export interface SchemaRef {
+  id: number;
+  type?: 'AVRO' | 'PROTOBUF' | 'JSON';
+  /** Set when the schema could not be fetched or the payload did not match. */
+  error?: string;
+}
+
 export interface Health {
   status: string;
   cluster: string;
   readOnly: boolean;
+  schemaRegistry?: boolean;
   build?: BuildInfo;
 }
 

@@ -32,6 +32,11 @@ import { highlightJson, partitionColor, pretty, relativeTime } from './format';
       <dt>Key</dt>
       <dd class="key">
         <span class="mono" [class.null]="m.key === null">{{ m.key ?? 'null' }}</span>
+        @if (m.keySchema; as s) {
+          <span class="tag" [class.schema-err]="!!s.error" [title]="s.error ?? 'Decoded with Schema Registry schema ' + s.id">
+            {{ s.error ? 'schema ' + s.id + ' failed' : (s.type ?? '').toLowerCase() + ' · ' + s.id }}
+          </span>
+        }
         @if (m.keyEncoding === 'base64') {
           <span class="tag">base64</span>
         }
@@ -64,6 +69,11 @@ import { highlightJson, partitionColor, pretty, relativeTime } from './format';
     <section class="value">
       <h3>
         Value
+        @if (m.valueSchema; as s) {
+          <span class="tag" [class.schema-err]="!!s.error" [title]="s.error ?? 'Decoded with Schema Registry schema ' + s.id">
+            {{ s.error ? 'schema ' + s.id + ' failed' : (s.type ?? '').toLowerCase() + ' · id ' + s.id }}
+          </span>
+        }
         @if (m.valueEncoding === 'base64') {
           <span class="tag">base64</span>
         }
@@ -81,12 +91,15 @@ import { highlightJson, partitionColor, pretty, relativeTime } from './format';
             class="btn sm"
             (click)="produceCopy()"
             [disabled]="!copyable()"
-            [title]="copyable() ? 'Open the producer with this key, value and headers (e.g. to reprocess it)' : 'Binary or truncated messages cannot be copied as text'"
+            [title]="copyable() ? 'Open the producer with this key, value and headers (e.g. to reprocess it)' : m.valueSchema || m.keySchema ? 'Schema Registry messages are shown decoded; re-encoding them is not supported' : 'Binary or truncated messages cannot be copied as text'"
           >
             <app-icon name="repeat" [size]="13" />Produce copy
           </button>
         }
       </h3>
+      @if (m.valueSchema?.error || m.keySchema?.error) {
+        <p class="schema-error"><app-icon name="alert" [size]="13" /> Showing raw bytes: {{ m.valueSchema?.error || m.keySchema?.error }}</p>
+      }
       @if (raw() || !val().json) {
         <pre class="code">{{ raw() ? m.value : val().text }}</pre>
       } @else {
@@ -95,6 +108,9 @@ import { highlightJson, partitionColor, pretty, relativeTime } from './format';
     </section>
   `,
   styles: `
+    .tag { white-space: nowrap; }
+    .tag.schema-err { color: var(--warn); border-color: var(--warn); }
+    .schema-error { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--warn); }
     :host {
       display: flex;
       flex-direction: column;
@@ -119,7 +135,7 @@ import { highlightJson, partitionColor, pretty, relativeTime } from './format';
     dd { margin: 0; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
     dd .mono { word-break: break-all; }
     .null { color: var(--faint); font-style: italic; }
-    h3 { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: var(--sp-2); }
+    h3 { display: flex; flex-wrap: wrap; row-gap: 6px; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: var(--sp-2); }
     .count { font-family: var(--mono); color: var(--text-2); }
     .grow { flex: 1; }
     .btn.sm { height: 26px; padding: 0 var(--sp-2); font-size: var(--fs-xs); text-transform: none; letter-spacing: 0; }
@@ -159,7 +175,7 @@ export class MessageDetail {
   /** Only text payloads can be re-sent byte-for-byte from a text form. */
   protected readonly copyable = computed(() => {
     const m = this.message();
-    return !m.truncated && m.valueEncoding !== 'base64' && m.keyEncoding !== 'base64';
+    return !m.truncated && m.valueEncoding !== 'base64' && m.keyEncoding !== 'base64' && !m.keySchema && !m.valueSchema;
   });
 
   protected produceCopy() {

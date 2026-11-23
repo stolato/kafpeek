@@ -16,6 +16,7 @@ import (
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": "ok", "cluster": s.kc.Name(), "readOnly": s.kc.ReadOnly(), "build": version.Get(),
+		"schemaRegistry": s.kc.HasSchemaRegistry(),
 	})
 }
 
@@ -44,6 +45,22 @@ func (s *Server) topic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, t)
+}
+
+// POST /api/topics  {name, partitions, replicationFactor, configs}
+func (s *Server) createTopic(w http.ResponseWriter, r *http.Request) {
+	var req kafka.CreateTopicRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	res, err := s.kc.CreateTopic(r.Context(), req)
+	if err != nil {
+		s.writeErr(w, r, err)
+		return
+	}
+	s.log.Info("topic created", "topic", res.Name, "partitions", res.Partitions,
+		"replicationFactor", res.ReplicationFactor, "configs", len(req.Configs), "remote", r.RemoteAddr)
+	writeJSON(w, http.StatusCreated, res)
 }
 
 // GET /api/topics/{name}/messages?limit=100&partition=0&filter=<CEL>&scan=10000

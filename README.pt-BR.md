@@ -32,8 +32,12 @@
   embutido. Sem JVM, sem banco, sem dependências.
 - **Conecta em qualquer cluster**: PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM e **AWS MSK IAM** (chaves, perfil/SSO
   ou role de ECS/EKS/EC2).
+- **Schema Registry**: mensagens Avro, Protobuf e JSON Schema são decodificadas para JSON no servidor, então o
+  visualizador e os filtros CEL (`json.cliente.id == "42"`) funcionam nelas também.
 - Tópicos, partições, configs e consumer groups com lag (e tendência).
-- **Produce** de mensagens com proteção para clusters de produção, ou modo **somente leitura**.
+- **Gerenciamento de tópicos** (criar, apagar, adicionar partições, editar configs, limpar mensagens) e **reset de
+  offsets** de consumer groups com prévia (dry run), além de **produce** de mensagens, tudo com proteção para
+  clusters de produção, ou modo **somente leitura**.
 - Seguro por padrão: login (Basic Auth), proteção contra CSRF e DNS rebinding, CSP restritiva, usuário não-root.
 
 ---
@@ -46,12 +50,14 @@
 4. [Referência de variáveis de ambiente](#referência-de-variáveis-de-ambiente)
 5. [Segurança e login](#segurança-e-login)
 6. [Filtros (CEL)](#filtros-cel)
-7. [Produzindo mensagens](#produzindo-mensagens)
-8. [Desenvolvimento](#desenvolvimento)
-9. [API](#api)
-10. [Arquitetura](#arquitetura)
-11. [Contribuindo](#contribuindo)
-12. [Licença](#licença)
+7. [Schema Registry](#schema-registry)
+8. [Produzindo mensagens](#produzindo-mensagens)
+9. [Gerenciando tópicos e offsets](#gerenciando-tópicos-e-offsets)
+10. [Desenvolvimento](#desenvolvimento)
+11. [API](#api)
+12. [Arquitetura](#arquitetura)
+13. [Contribuindo](#contribuindo)
+14. [Licença](#licença)
 
 ---
 
@@ -479,7 +485,7 @@ Modelo completo em [`.env.example`](.env.example).
 | `KAFKA_TLS_CERT_FILE` / `KAFKA_TLS_KEY_FILE` | — | Certificado e chave PEM do cliente (mTLS) |
 | `KAFKA_TLS_SERVER_NAME` | host do broker | Nome para SNI/validação do certificado |
 | `KAFKA_TLS_INSECURE_SKIP_VERIFY` | `false` | Desliga a validação do certificado (só testes) |
-| `KAFKA_READ_ONLY` | `false` | Desliga toda escrita (Produce) |
+| `KAFKA_READ_ONLY` | `false` | Desliga toda escrita (Produce, alterações em tópicos, reset de offsets) |
 
 **AWS (para `aws-iam`)**: veja [7) AWS MSK com IAM](#7-aws-msk-com-iam) para quais usar em cada caso.
 
@@ -493,6 +499,15 @@ Modelo completo em [`.env.example`](.env.example).
 | `AWS_REGION` | Região de assinatura de fallback, usada só quando o hostname do broker não contém a região (hostnames padrão do MSK não precisam). `AWS_DEFAULT_REGION` também é aceita |
 
 ECS, EKS e EC2 fornecem credenciais pela role da plataforma, sem variáveis.
+
+**Schema Registry** (opcional): veja [Schema Registry](#schema-registry).
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `SCHEMA_REGISTRY_URL` | — | URL do registry compatível com Confluent; ativa a decodificação |
+| `SCHEMA_REGISTRY_USERNAME` / `SCHEMA_REGISTRY_PASSWORD` | — | Basic auth (no Confluent Cloud: API key / secret) |
+| `SCHEMA_REGISTRY_TLS_CA_FILE` | — | CA(s) PEM extras para validar o registry |
+| `SCHEMA_REGISTRY_TLS_INSECURE_SKIP_VERIFY` | `false` | Desliga a validação do certificado (só para testes) |
 
 **Servidor / segurança**
 
@@ -517,7 +532,7 @@ UI_PASSWORD=uma-senha-forte
   (o log avisa); com só uma, o app não sobe. Senha errada responde com atraso (anti força bruta).
   Não há logout — feche o navegador.
 - **Basic Auth envia a senha a cada requisição**: fora de localhost/VPN, use HTTPS na frente.
-- Escritas (Produce) exigem `Content-Type: application/json` e são **bloqueadas quando vêm de outro site** (CSRF).
+- Escritas exigem `Content-Type: application/json` e são **bloqueadas quando vêm de outro site** (CSRF).
 - Hosts desconhecidos recebem 403 (**DNS rebinding**) — configure `ALLOWED_HOSTS`.
 - Headers: CSP restritiva (sem JS inline, sem iframe), `nosniff`, `no-referrer`; respostas da API com `no-store`.
 - `KAFKA_READ_ONLY=true` é recomendado em instalações compartilhadas.
@@ -555,12 +570,52 @@ filtros diferentes compartilham um único consumer e cada expressão distinta é
 
 ---
 
+## Schema Registry
+
+Defina `SCHEMA_REGISTRY_URL` (Confluent, Confluent Cloud, Redpanda, Karapace ou Apicurio em modo ccompat) e as keys e
+values escritos por um serializer do registry (magic byte `0` + ID do schema) são decodificados **no servidor**:
+
+- **Avro**, com referências entre schemas e logical types (decimais viram números);
+- **Protobuf**, com imports, mensagens aninhadas e os well-known types; a saída usa os nomes de campo do `.proto`;
+- **JSON Schema** (o JSON depois do cabeçalho de 5 bytes).
+
+O JSON decodificado é o que você vê, copia e filtra: `json.valor > 100` funciona num tópico Avro. O painel de detalhe
+mostra o tipo e o ID do schema (ex.: `AVRO · ID 7`). Cada schema é buscado uma vez por ID e fica em cache. Se o
+registry estiver fora do ar ou o payload não bater com o schema, os bytes brutos aparecem junto com o motivo. O
+**Produce copy** fica desabilitado nessas mensagens (ainda não há re-encoding). O AWS Glue Schema Registry usa outro
+formato e não é suportado.
+
+---
+
 ## Produzindo mensagens
 
 Botão **Produce** no tópico (ou **Produce copy** numa mensagem, para reprocessá-la): key, value (JSON validado ou
 texto), headers, partição automática (mesmo hash do cliente Java) ou fixa, tombstone (`null`).
 Clusters com `prod` no nome exigem confirmação a cada abertura. Desative tudo com `KAFKA_READ_ONLY=true`.
 No MSK IAM é preciso `kafka-cluster:WriteData`.
+
+---
+
+## Gerenciando tópicos e offsets
+
+Tudo isso some com `KAFKA_READ_ONLY=true`, é recusado em tópicos de sistema (`__consumer_offsets`, `_schemas`...),
+fica registrado no log com o IP do cliente e pede confirmação em clusters com `prod` no nome.
+
+- **Criar tópico** (página Topics): nome (validado com as regras do Kafka, avisa colisões entre `.` e `_`),
+  partições, fator de replicação (comparado com o número de brokers), cleanup policy, retenção e qualquer outra config.
+- **Apagar tópico** (ícone de lixeira no tópico): é preciso digitar o nome do tópico.
+- **Adicionar partições** (aba Partitions): só aumenta, e avisa que mensagens com key passam a cair em outras partições.
+- **Limpar mensagens** (aba Partitions, tópico inteiro ou uma partição): apaga os registros atuais movendo o offset
+  inicial (`DeleteRecords`); digite o nome do tópico para confirmar. Tópicos só com compactação não podem ser limpos.
+- **Editar configs** (aba Configs): edite qualquer valor na própria linha, adicione um override ou volte ao default do broker.
+- **Reset de offsets** (página do consumer group): earliest, latest, data/hora, offset absoluto ou deslocamento de N,
+  em todas ou em algumas partições de um tópico. Cada mudança roda um **dry run** e mostra o novo offset e o lag por
+  partição antes de aplicar. O Kafka só aceita o reset com o grupo **sem consumidores rodando**; o kafpeek avisa quando
+  o grupo está ativo.
+
+No MSK IAM, o principal precisa das ações `kafka-cluster:` correspondentes (ex.: `CreateTopic`, `DeleteTopic`,
+`AlterTopic`, `AlterTopicDynamicConfiguration`, `AlterGroup`); confira na documentação de IAM do MSK o mapeamento do
+purge e do reset. Sem elas a ação falha com um 403 claro.
 
 ---
 
@@ -584,10 +639,15 @@ Testes: `go test -race ./internal/...`
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/api/health` | status, cluster, read-only e versão |
+| GET | `/api/health` | status, cluster, read-only, schema registry e versão |
 | GET | `/api/cluster` | cluster ID, controller, brokers |
 | GET | `/api/topics` | tópicos com partições, RF, mensagens (aprox.) e saúde |
+| POST | `/api/topics` | cria um tópico `{name, partitions?, replicationFactor?, configs?}` (omitido = default do broker; 409 se já existe, 403 em read-only) |
 | GET | `/api/topics/{name}` | partições, offsets e configs |
+| DELETE | `/api/topics/{name}` | apaga o tópico; corpo `{confirm: "<nome>"}` |
+| POST | `/api/topics/{name}/partitions` | `{count}`: aumenta o tópico para `count` partições |
+| PATCH | `/api/topics/{name}/configs` | `{set: {k: v}, reset: [k]}` |
+| POST | `/api/topics/{name}/purge` | `{confirm: "<nome>", partitions?}`: apaga os registros atuais |
 | GET | `/api/topics/{name}/messages?limit=100&partition=0` | últimas N mensagens |
 | GET | `/api/topics/{name}/search?filter=<CEL>&mode=newest\|range\|all&scan=N&from=&to=&limit=N` | **SSE**: busca em streaming (`start`, `batch`, `done`, `failure`); fechar a conexão cancela a varredura |
 | GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: tempo real (`ready`, `batch`, `failure`) |
@@ -595,6 +655,7 @@ Testes: `go test -race ./internal/...`
 | GET | `/api/filter/validate?expr=<CEL>` | valida a expressão: `200` ou `400 {"error","column"}` |
 | GET | `/api/consumer-groups` | grupos com lag total |
 | GET | `/api/consumer-groups/{name}` | lag por partição |
+| POST | `/api/consumer-groups/{name}/reset-offsets` | `{topic, partitions?, to: earliest\|latest\|timestamp\|offset\|shift, timestamp?, offset?, dryRun}`; devolve o plano por partição (409 se o grupo está ativo) |
 | GET | `/api/streams` | streams ao vivo ativos |
 
 ---

@@ -15,6 +15,7 @@ import (
 	"github.com/stolato/kafpeek/internal/api"
 	"github.com/stolato/kafpeek/internal/config"
 	"github.com/stolato/kafpeek/internal/kafka"
+	"github.com/stolato/kafpeek/internal/schemareg"
 	"github.com/stolato/kafpeek/internal/stream"
 	"github.com/stolato/kafpeek/internal/version"
 	"github.com/stolato/kafpeek/web"
@@ -59,6 +60,19 @@ func run(log *slog.Logger) error {
 	}
 	defer kc.Close()
 	log.Info("connected to kafka")
+
+	if sr := cfg.SchemaRegistry; sr.URL != "" {
+		dec, err := schemareg.New(schemareg.Config{
+			URL: sr.URL, Username: sr.Username, Password: sr.Password,
+			TLSCAFile: sr.TLSCAFile, TLSInsecureSkipVerify: sr.TLSInsecureSkipVerify,
+		})
+		if err != nil {
+			return err
+		}
+		kc.SetSchemaDecoder(dec)
+		// Never log credentials or URL userinfo.
+		log.Info("schema registry decoding enabled", "auth", sr.Username != "")
+	}
 
 	exposed := !api.IsLoopbackAddr(cfg.HTTPAddr)
 	switch {

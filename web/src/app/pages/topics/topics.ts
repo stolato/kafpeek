@@ -2,7 +2,9 @@ import { Component, ElementRef, computed, signal, viewChild } from '@angular/cor
 import { httpResource } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { inject } from '@angular/core';
-import { TopicSummary } from '../../core/models';
+import { CreateTopicResult, TopicSummary } from '../../core/models';
+import { SessionService } from '../../core/session.service';
+import { CreateTopicDialog } from '../../shared/create-topic-dialog';
 import { Icon } from '../../shared/icon';
 import { PageHeader } from '../../shared/page-header';
 import { refreshTracker } from '../../shared/refresh';
@@ -13,10 +15,17 @@ type Key = 'name' | 'partitions' | 'replicationFactor' | 'messages' | 'health';
 
 @Component({
   selector: 'app-topics',
-  imports: [RouterLink, Icon, PageHeader, SortHeader],
+  imports: [RouterLink, Icon, PageHeader, SortHeader, CreateTopicDialog],
   host: { '(document:keydown)': 'onKey($event)' },
   template: `
-    <app-page-header title="Topics" [tracker]="tracker" />
+    <app-page-header title="Topics" [tracker]="tracker">
+      @if (!session.readOnly()) {
+        <button class="btn primary" (click)="createDlg().show()"><app-icon name="plus" [size]="14" /> New topic</button>
+      }
+    </app-page-header>
+    @if (!session.readOnly()) {
+      <app-create-topic-dialog [existing]="names()" (created)="onCreated($event)" />
+    }
 
     <section class="stats" aria-label="Summary">
       <div class="stat">
@@ -132,6 +141,8 @@ type Key = 'name' | 'partitions' | 'replicationFactor' | 'messages' | 'health';
 export class TopicsPage {
   private readonly router = inject(Router);
   private readonly searchEl = viewChild.required<ElementRef<HTMLInputElement>>('search');
+  protected readonly createDlg = viewChild.required(CreateTopicDialog);
+  protected readonly session = inject(SessionService);
 
   protected readonly topics = httpResource<TopicSummary[]>(() => '/api/topics');
   protected readonly tracker = refreshTracker(this.topics, 30_000);
@@ -146,6 +157,7 @@ export class TopicsPage {
   protected readonly full = full;
   protected readonly loaded = computed(() => this.topics.hasValue());
 
+  protected readonly names = computed(() => (this.topics.value() ?? []).map((t) => t.name));
   private readonly visible = computed(() => (this.topics.value() ?? []).filter((t) => this.showInternal() || !t.internal));
   protected readonly visibleTotal = computed(() => this.visible().length);
 
@@ -170,6 +182,11 @@ export class TopicsPage {
   protected open(name: string, e: MouseEvent) {
     if ((e.target as HTMLElement).closest('a')) return; // let the link handle it (supports ctrl/cmd-click)
     this.router.navigate(['/topics', name]);
+  }
+
+  protected onCreated(t: CreateTopicResult) {
+    this.topics.reload();
+    this.router.navigate(['/topics', t.name]);
   }
 
   protected onKey(e: KeyboardEvent) {

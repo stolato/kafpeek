@@ -23,6 +23,7 @@ import (
 	"github.com/twmb/franz-go/plugin/kslog"
 
 	"github.com/stolato/kafpeek/internal/config"
+	"github.com/stolato/kafpeek/internal/schemareg"
 )
 
 // Client holds one long-lived connection per cluster. It is safe for
@@ -39,7 +40,15 @@ type Client struct {
 	prodOnce sync.Once
 	prod     *kgo.Client // created on first Produce
 	prodErr  error
+
+	schemas *schemareg.Decoder // nil when no Schema Registry is configured
 }
+
+// SetSchemaDecoder enables Schema Registry decoding of keys and values.
+func (c *Client) SetSchemaDecoder(d *schemareg.Decoder) { c.schemas = d }
+
+// HasSchemaRegistry reports whether messages are decoded via a registry.
+func (c *Client) HasSchemaRegistry() bool { return c.schemas != nil }
 
 func New(ctx context.Context, cfg config.Kafka, log *slog.Logger) (*Client, error) {
 	for _, w := range portWarnings(cfg) {

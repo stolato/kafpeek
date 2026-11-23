@@ -1,7 +1,9 @@
-import { Component, computed, effect, input, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { httpResource } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { ConsumerGroup } from '../../core/models';
+import { SessionService } from '../../core/session.service';
+import { ResetOffsetsDialog } from '../../shared/reset-offsets-dialog';
 import { Icon } from '../../shared/icon';
 import { PageHeader } from '../../shared/page-header';
 import { refreshTracker } from '../../shared/refresh';
@@ -14,13 +16,26 @@ const TREND_POINTS = 60; // 60 samples × 5s = last 5 minutes
 
 @Component({
   selector: 'app-group-detail',
-  imports: [RouterLink, Icon, PageHeader, Sparkline, SortHeader],
+  imports: [RouterLink, Icon, PageHeader, Sparkline, SortHeader, ResetOffsetsDialog],
   template: `
     <app-page-header [title]="name()" [monoTitle]="true" [crumbs]="[{ label: 'Consumer groups', link: '/groups' }]" [tracker]="tracker">
       @if (group.value(); as g) {
         <span class="pill" [class]="tone()">{{ g.state }}</span>
       }
+      @if (!session.readOnly() && group.value()?.topics?.length) {
+        <button class="btn" (click)="resetDlg().show()" [title]="(group.value()?.members ?? 0) > 0 ? 'The group must have no running consumers to apply a reset' : ''">
+          <app-icon name="rotate-ccw" [size]="14" /> Reset offsets
+        </button>
+      }
     </app-page-header>
+    @if (!session.readOnly()) {
+      <app-reset-offsets-dialog
+        [group]="name()"
+        [topics]="group.value()?.topics ?? []"
+        [partitionsByTopic]="partitionsByTopic()"
+        (applied)="group.reload()"
+      />
+    }
 
     @if (group.error(); as e) {
       <div class="alert danger" role="alert">
@@ -112,6 +127,9 @@ export class GroupDetailPage {
   /** Bound from the :name route param. */
   readonly name = input.required<string>();
 
+  protected readonly session = inject(SessionService);
+  protected readonly resetDlg = viewChild.required(ResetOffsetsDialog);
+
   protected readonly group = httpResource<ConsumerGroup>(() => `/api/consumer-groups/${encodeURIComponent(this.name())}`);
   protected readonly tracker = refreshTracker(this.group, 5_000);
   protected readonly sort = signal<SortState<Key>>({ key: 'lag', dir: 'desc' });
@@ -122,6 +140,12 @@ export class GroupDetailPage {
 
   protected readonly tone = computed(() => groupStateTone(this.group.value()?.state ?? ''));
   protected readonly rows = computed(() => sortBy(this.group.value()?.lag ?? [], this.sort(), (l, k) => l[k]));
+  protected readonly partitionsByTopic = computed(() => {
+    const out: Record<string, number[]> = {};
+    for (const l of this.group.value()?.lag ?? []) (out[l.topic] ??= []).push(l.partition);
+    for (const ps of Object.values(out)) ps.sort((a, b) => a - b);
+    return out;
+  });
   private readonly maxLag = computed(() => Math.max(1, ...(this.group.value()?.lag ?? []).map((l) => l.lag)));
 
   /** Client-side lag history, sampled on every refresh (kept while the page is open). */

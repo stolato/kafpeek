@@ -85,6 +85,16 @@ type Message struct {
 	ValueEncoding string `json:"valueEncoding,omitempty"`
 	ValueSize     int    `json:"valueSize"`
 	Truncated     bool   `json:"truncated,omitempty"`
+	// Set when the key/value was written with a Schema Registry serializer.
+	// On success Key/Value hold the payload decoded to JSON.
+	KeySchema   *SchemaRef `json:"keySchema,omitempty"`
+	ValueSchema *SchemaRef `json:"valueSchema,omitempty"`
+}
+
+type SchemaRef struct {
+	ID    int    `json:"id"`
+	Type  string `json:"type,omitempty"` // AVRO, PROTOBUF, JSON
+	Error string `json:"error,omitempty"`
 }
 
 type Header struct {

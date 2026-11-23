@@ -226,6 +226,20 @@ select {
       background: var(--hover);
     }
   }
+  &.danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #2a0606;
+    font-weight: 600;
+    &:hover:not(:disabled) {
+      filter: brightness(1.1);
+      background: var(--danger);
+      color: #2a0606;
+    }
+  }
+  &.ghost.danger-text {
+    color: var(--danger);
+  }
   &.icon-only {
     width: 32px;
     padding: 0;

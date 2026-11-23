@@ -163,7 +163,7 @@ func (c *Client) Search(ctx context.Context, topic string, opts SearchOptions, c
 				res.Position = position() // keep counters in step with matches already streamed
 				cb.OnProgress(res.SearchProgress)
 			}
-			m := toMessage(r)
+			m := c.toMessage(r)
 			if opts.Match != nil && !opts.Match(&m) {
 				return
 			}

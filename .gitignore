@@ -6,3 +6,4 @@
 
 # graphify knowledge graph (generated locally, regenerate with /graphify)
 graphify-out/
+.openidea

@@ -98,7 +98,7 @@ func (c *Client) Browse(ctx context.Context, topic string, opts BrowseOptions) (
 		fetches.EachRecord(func(r *kgo.Record) {
 			got++
 			res.Scanned++
-			m := toMessage(r)
+			m := c.toMessage(r)
 			if opts.Match == nil || opts.Match(&m) {
 				msgs = append(msgs, m)
 				// Keep memory bounded: only the newest Limit can be returned,
@@ -189,14 +189,14 @@ func (c *Client) Tail(ctx context.Context, topic string, fn func([]Message)) err
 			return fmt.Errorf("partition %d: %w", fe.Partition, fe.Err)
 		}
 		batch := make([]Message, 0, fetches.NumRecords())
-		fetches.EachRecord(func(r *kgo.Record) { batch = append(batch, toMessage(r)) })
+		fetches.EachRecord(func(r *kgo.Record) { batch = append(batch, c.toMessage(r)) })
 		if len(batch) > 0 {
 			fn(batch)
 		}
 	}
 }
 
-func toMessage(r *kgo.Record) Message {
+func (c *Client) toMessage(r *kgo.Record) Message {
 	m := Message{
 		Topic:     r.Topic,
 		Partition: r.Partition,
@@ -205,11 +205,11 @@ func toMessage(r *kgo.Record) Message {
 		ValueSize: len(r.Value),
 	}
 	if r.Key != nil {
-		k, enc, _ := encode(r.Key)
+		k, enc, _ := encode(c.decodeSchema(r.Key, &m.KeySchema))
 		m.Key, m.KeyEncoding = &k, enc
 	}
 	if r.Value != nil {
-		v, enc, truncated := encode(r.Value)
+		v, enc, truncated := encode(c.decodeSchema(r.Value, &m.ValueSchema))
 		m.Value, m.ValueEncoding, m.Truncated = &v, enc, truncated
 	}
 	for _, h := range r.Headers {
@@ -217,6 +217,22 @@ func toMessage(r *kgo.Record) Message {
 		m.Headers = append(m.Headers, Header{Key: h.Key, Value: v})
 	}
 	return m
+}
+
+// decodeSchema returns the JSON form of a Schema Registry payload (recording
+// the schema in *ref), or b unchanged when it is not registry-framed or
+// cannot be decoded (the error is then reported in *ref).
+func (c *Client) decodeSchema(b []byte, ref **SchemaRef) []byte {
+	res, ok := c.schemas.Decode(b)
+	if !ok {
+		return b
+	}
+	*ref = &SchemaRef{ID: res.ID, Type: res.Type}
+	if res.Err != nil {
+		(*ref).Error = res.Err.Error()
+		return b
+	}
+	return res.JSON
 }
 
 func encode(b []byte) (s, encoding string, truncated bool) {
