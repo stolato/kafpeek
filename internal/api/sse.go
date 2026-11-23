@@ -10,13 +10,23 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/stolato/kafpeek/internal/kafka"
+	"github.com/stolato/kafpeek/internal/stream"
 )
 
 const (
-	sseFlushEvery = 250 * time.Millisecond // batch messages to keep the browser responsive
-	sseMaxBatch   = 500
-	sseHeartbeat  = 15 * time.Second // keeps proxies/load balancers from closing idle streams
+	sseFlushEvery    = 250 * time.Millisecond // batch messages to keep the browser responsive
+	sseMaxBatch      = 500
+	sseMaxBatchBytes = 1 << 20
+	sseHeartbeat     = 15 * time.Second // keeps proxies/load balancers from closing idle streams
+	// sseWriteTimeout disconnects clients that stop reading: a stalled socket
+	// would otherwise pin its handler, batch and subscriber buffer forever.
+	sseWriteTimeout = 10 * time.Second
+	// maxLiveClients caps concurrent live-tail streams; with the per-subscriber
+	// byte budget this bounds the memory live tail can use.
+	maxLiveClients = 64
 )
+
+var liveSlots = make(chan struct{}, maxLiveClients)
 
 // sseStart writes the event-stream headers and returns the two writers shared
 // by the live and search streams. Both are safe for concurrent use.
@@ -32,6 +42,11 @@ func sseStart(w http.ResponseWriter) (send func(event string, v any) error, ping
 	write := func(frame string) error {
 		mu.Lock()
 		defer mu.Unlock()
+		// The deadline covers only this write; it is cleared afterwards so it
+		// cannot leak into a later request on the same keep-alive connection.
+		// Writers without deadline support (tests) just skip it.
+		_ = rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout))
+		defer func() { _ = rc.SetWriteDeadline(time.Time{}) }()
 		if _, err := fmt.Fprint(w, frame); err != nil {
 			return err
 		}
@@ -71,6 +86,16 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, r, err)
 		return
 	}
+	select {
+	case liveSlots <- struct{}{}:
+		defer func() { <-liveSlots }()
+	default:
+		s.log.Warn("live client rejected: too many streams", "topic", topic, "max", maxLiveClients, "remote", r.RemoteAddr)
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": fmt.Sprintf("too many live streams open (max %d); close some tabs and try again", maxLiveClients),
+		})
+		return
+	}
 
 	w.Header().Set("Connection", "keep-alive")
 	send, ping := sseStart(w)
@@ -90,13 +115,15 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	defer heartbeat.Stop()
 
 	batch := make([]kafka.Message, 0, sseMaxBatch)
+	var batchBytes int64
 	sendBatch := func() error {
 		dropped, scanned := sub.Dropped(), sub.Scanned()
 		if len(batch) == 0 && dropped == 0 && scanned == 0 {
 			return nil
 		}
 		err := send("batch", liveBatch{Messages: batch, Dropped: dropped, Scanned: scanned})
-		batch = batch[:0]
+		clear(batch) // drop references so payloads can be collected
+		batch, batchBytes = batch[:0], 0
 		return err
 	}
 
@@ -110,8 +137,10 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 				_ = send("failure", map[string]string{"error": fmt.Sprint(sub.Err())})
 				return
 			}
+			sub.Release(&m)
 			batch = append(batch, m)
-			if len(batch) >= sseMaxBatch {
+			batchBytes += stream.MessageBytes(&m)
+			if len(batch) >= sseMaxBatch || batchBytes >= sseMaxBatchBytes {
 				if sendBatch() != nil {
 					return
 				}

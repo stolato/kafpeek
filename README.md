@@ -605,7 +605,9 @@ logged with the client IP, and ask for confirmation on clusters with `prod` in t
 - **Add partitions** (Partitions tab): only grows, and warns that keyed messages will map to different partitions.
 - **Purge messages** (Partitions tab, whole topic or one partition): deletes the records currently stored by moving the
   start offset (`DeleteRecords`); type the topic name to confirm. Compact-only topics can't be purged.
-- **Edit configs** (Configs tab): edit any value inline, add an override, or reset one to the broker default.
+- **Edit configs** (Configs tab): edit any value inline, add an override, or reset one to the broker default. Configs
+  that can delete data (`retention.*`, `local.retention.*`, `cleanup.policy`, `delete.retention.ms`,
+  `remote.storage.enable`) require typing the topic name, like purge.
 - **Reset offsets** (consumer group page): earliest, latest, date/time, absolute offset, or shift by N, for all or
   some partitions of a topic. Every change runs a **dry run** and shows the new offset and lag per partition before you
   apply. Kafka only accepts a reset while the group has **no running consumers**; kafpeek tells you when it is active.
@@ -643,11 +645,11 @@ Tests: `go test -race ./internal/...`
 | GET | `/api/topics/{name}` | partitions, offsets, and configs |
 | DELETE | `/api/topics/{name}` | deletes the topic; body `{confirm: "<name>"}` |
 | POST | `/api/topics/{name}/partitions` | `{count}`: grows the topic to `count` partitions |
-| PATCH | `/api/topics/{name}/configs` | `{set: {k: v}, reset: [k]}` |
+| PATCH | `/api/topics/{name}/configs` | `{set: {k: v}, reset: [k], confirm?}`: `confirm: "<name>"` is required when touching a data-deleting config |
 | POST | `/api/topics/{name}/purge` | `{confirm: "<name>", partitions?}`: deletes the current records |
 | GET | `/api/topics/{name}/messages?limit=100&partition=0` | last N messages |
 | GET | `/api/topics/{name}/search?filter=<CEL>&mode=newest\|range\|all&scan=N&from=&to=&limit=N` | **SSE**: streaming search (`start`, `batch`, `done`, `failure`); closing the connection cancels the scan |
-| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: real time (`ready`, `batch`, `failure`) |
+| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: real time (`ready`, `batch`, `failure`); 429 above 64 open streams |
 | POST | `/api/topics/{name}/messages` | produces a message `{key, value, headers, partition?}` (403 in read-only) |
 | GET | `/api/filter/validate?expr=<CEL>` | validates the expression: `200` or `400 {"error","column"}` |
 | GET | `/api/consumer-groups` | groups with total lag |

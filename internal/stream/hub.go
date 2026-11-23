@@ -16,7 +16,13 @@ import (
 	"github.com/stolato/kafpeek/internal/kafka"
 )
 
-const subscriberBuffer = 1024
+const (
+	subscriberBuffer = 1024
+	// subscriberMaxBytes bounds the memory a slow subscriber can pin: values
+	// are up to 64 KiB, so a full 1024-message buffer could otherwise hold
+	// 64 MiB per browser tab.
+	subscriberMaxBytes = 4 << 20
+)
 
 // Tailer is the subset of kafka.Client the hub needs (eases testing).
 type Tailer interface {
@@ -44,7 +50,27 @@ type Subscriber struct {
 	filter  *filter.Program // nil = everything
 	dropped atomic.Int64
 	scanned atomic.Int64
+	queued  atomic.Int64 // approximate bytes sitting in C
 	err     error
+}
+
+// Release must be called for each message received from C: it returns the
+// message's bytes to this subscriber's buffer budget.
+func (s *Subscriber) Release(m *kafka.Message) { s.queued.Add(-MessageBytes(m)) }
+
+// MessageBytes approximates the memory a message holds.
+func MessageBytes(m *kafka.Message) int64 {
+	n := 256 + len(m.Topic) // struct, timestamp, encodings...
+	if m.Key != nil {
+		n += len(*m.Key)
+	}
+	if m.Value != nil {
+		n += len(*m.Value)
+	}
+	for _, h := range m.Headers {
+		n += 32 + len(h.Key) + len(h.Value)
+	}
+	return int64(n)
 }
 
 // Scanned returns and resets how many messages were evaluated against this
@@ -140,6 +166,7 @@ func deliver(batch []kafka.Message, subs []*Subscriber) {
 	results := map[string]bool{}
 	for i := range batch {
 		m := &batch[i]
+		size := MessageBytes(m)
 		in := filter.NewInput(m) // shared: JSON parsed at most once per message
 		clear(results)
 		for _, s := range subs {
@@ -155,10 +182,18 @@ func deliver(batch []kafka.Message, subs []*Subscriber) {
 			if !ok {
 				continue
 			}
+			// Slow client: drop (and count) instead of blocking the shared
+			// consumer, once either the slot or the byte budget is used up.
+			if s.queued.Add(size) > subscriberMaxBytes {
+				s.queued.Add(-size)
+				s.dropped.Add(1)
+				continue
+			}
 			select {
 			case s.C <- *m:
 			default:
-				s.dropped.Add(1) // slow client: drop, never block
+				s.queued.Add(-size)
+				s.dropped.Add(1)
 			}
 		}
 	}

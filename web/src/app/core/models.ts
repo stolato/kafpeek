@@ -121,6 +121,23 @@ export interface CreateTopicResult {
 export interface TopicConfigChange {
   set?: Record<string, string>;
   reset?: string[];
+  /** Topic name; required by the server for data-destroying configs. */
+  confirm?: string;
+}
+
+/** Configs that can delete existing messages (kept in sync with the server's list). */
+export const DESTRUCTIVE_CONFIGS = new Set([
+  'retention.ms',
+  'retention.bytes',
+  'local.retention.ms',
+  'local.retention.bytes',
+  'cleanup.policy',
+  'delete.retention.ms',
+  'remote.storage.enable',
+]);
+
+export function isDestructiveConfig(name: string): boolean {
+  return DESTRUCTIVE_CONFIGS.has(name.trim().toLowerCase());
 }
 
 export interface PurgeResult {

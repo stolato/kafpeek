@@ -608,6 +608,8 @@ fica registrado no log com o IP do cliente e pede confirmação em clusters com 
 - **Limpar mensagens** (aba Partitions, tópico inteiro ou uma partição): apaga os registros atuais movendo o offset
   inicial (`DeleteRecords`); digite o nome do tópico para confirmar. Tópicos só com compactação não podem ser limpos.
 - **Editar configs** (aba Configs): edite qualquer valor na própria linha, adicione um override ou volte ao default do broker.
+  Configs que podem apagar dados (`retention.*`, `local.retention.*`, `cleanup.policy`, `delete.retention.ms`,
+  `remote.storage.enable`) exigem digitar o nome do tópico, como no purge.
 - **Reset de offsets** (página do consumer group): earliest, latest, data/hora, offset absoluto ou deslocamento de N,
   em todas ou em algumas partições de um tópico. Cada mudança roda um **dry run** e mostra o novo offset e o lag por
   partição antes de aplicar. O Kafka só aceita o reset com o grupo **sem consumidores rodando**; o kafpeek avisa quando
@@ -646,11 +648,11 @@ Testes: `go test -race ./internal/...`
 | GET | `/api/topics/{name}` | partições, offsets e configs |
 | DELETE | `/api/topics/{name}` | apaga o tópico; corpo `{confirm: "<nome>"}` |
 | POST | `/api/topics/{name}/partitions` | `{count}`: aumenta o tópico para `count` partições |
-| PATCH | `/api/topics/{name}/configs` | `{set: {k: v}, reset: [k]}` |
+| PATCH | `/api/topics/{name}/configs` | `{set: {k: v}, reset: [k], confirm?}`: `confirm: "<name>"` é obrigatório ao mexer em config que apaga dados |
 | POST | `/api/topics/{name}/purge` | `{confirm: "<nome>", partitions?}`: apaga os registros atuais |
 | GET | `/api/topics/{name}/messages?limit=100&partition=0` | últimas N mensagens |
 | GET | `/api/topics/{name}/search?filter=<CEL>&mode=newest\|range\|all&scan=N&from=&to=&limit=N` | **SSE**: busca em streaming (`start`, `batch`, `done`, `failure`); fechar a conexão cancela a varredura |
-| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: tempo real (`ready`, `batch`, `failure`) |
+| GET | `/api/topics/{name}/live?filter=<CEL>` | **SSE**: tempo real (`ready`, `batch`, `failure`); 429 acima de 64 streams abertos |
 | POST | `/api/topics/{name}/messages` | produz uma mensagem `{key, value, headers, partition?}` (403 em read-only) |
 | GET | `/api/filter/validate?expr=<CEL>` | valida a expressão: `200` ou `400 {"error","column"}` |
 | GET | `/api/consumer-groups` | grupos com lag total |

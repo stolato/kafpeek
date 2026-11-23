@@ -100,6 +100,47 @@ func TestSlowSubscriberDropsInsteadOfBlocking(t *testing.T) {
 	}
 }
 
+// A subscriber that stops reading must not pin more than subscriberMaxBytes,
+// even when every message is large (pentest: 60 stalled tabs reached 7.7 GB).
+func TestSlowSubscriberByteBudget(t *testing.T) {
+	src := &fakeTailer{feed: make(chan []kafka.Message)}
+	h := newHub(t, src)
+	slow, unsub := h.Subscribe("t", nil)
+	defer unsub()
+
+	v := string(make([]byte, 64<<10))
+	batch := make([]kafka.Message, 200) // ~12.8 MiB, well under the slot count
+	for i := range batch {
+		batch[i].Value = &v
+	}
+	src.feed <- batch
+	src.feed <- nil // sync: first batch fully delivered
+
+	queued := len(slow.C)
+	if got := slow.queued.Load(); got > subscriberMaxBytes {
+		t.Fatalf("queued %d bytes, budget is %d", got, subscriberMaxBytes)
+	}
+	if queued == 0 || queued >= len(batch) {
+		t.Fatalf("expected a partial buffer, got %d of %d messages", queued, len(batch))
+	}
+	if d := slow.Dropped(); d != int64(len(batch)-queued) {
+		t.Fatalf("dropped %d, want %d", d, len(batch)-queued)
+	}
+
+	// Reading and releasing frees the budget for new messages.
+	for range queued {
+		m := recv(t, slow)
+		slow.Release(&m)
+	}
+	if got := slow.queued.Load(); got != 0 {
+		t.Fatalf("budget not returned after Release: %d bytes", got)
+	}
+	src.feed <- batch[:1]
+	if m := recv(t, slow); m.Value == nil {
+		t.Fatal("expected delivery after the budget was freed")
+	}
+}
+
 func TestFailureClosesSubscribers(t *testing.T) {
 	src := &fakeTailer{feed: make(chan []kafka.Message), failErr: errors.New("auth failed")}
 	h := newHub(t, src)

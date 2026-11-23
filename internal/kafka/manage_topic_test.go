@@ -83,14 +83,32 @@ func TestManageTopic(t *testing.T) {
 		t.Fatalf("after SetPartitions: partitions=%d err=%v, want 5", d.Partitions, err)
 	}
 
-	// Configs: set, then reset.
-	if err := c.AlterTopicConfigs(ctx, "orders", TopicConfigChange{Set: map[string]string{"retention.ms": "3600000"}}); err != nil {
+	// Configs: set, then reset. Data-destroying configs need the topic name
+	// as confirmation, otherwise retention.ms=1 would be a purge without one.
+	for _, ch := range []TopicConfigChange{
+		{Set: map[string]string{"retention.ms": "1"}},
+		{Set: map[string]string{" Cleanup.Policy ": "compact"}},
+		{Set: map[string]string{"retention.ms": "1"}, Confirm: "other-topic"},
+		{Reset: []string{"retention.bytes"}},
+		{Set: map[string]string{"max.message.bytes": "2000000", "remote.storage.enable": "false"}},
+	} {
+		if err := c.AlterTopicConfigs(ctx, "orders", ch); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("AlterTopicConfigs(%+v) without confirmation: err=%v, want ErrInvalid", ch, err)
+		}
+	}
+	if v := configValue(t, c, ctx, "orders", "retention.ms"); v == "1" {
+		t.Fatal("retention.ms changed without confirmation")
+	}
+	if err := c.AlterTopicConfigs(ctx, "orders", TopicConfigChange{Set: map[string]string{"max.message.bytes": "2000000"}}); err != nil {
+		t.Fatalf("harmless config should not need confirmation: %v", err)
+	}
+	if err := c.AlterTopicConfigs(ctx, "orders", TopicConfigChange{Set: map[string]string{"retention.ms": "3600000"}, Confirm: "orders"}); err != nil {
 		t.Fatal(err)
 	}
 	if v := configValue(t, c, ctx, "orders", "retention.ms"); v != "3600000" {
 		t.Fatalf("retention.ms = %q after set, want 3600000", v)
 	}
-	if err := c.AlterTopicConfigs(ctx, "orders", TopicConfigChange{Reset: []string{"retention.ms"}}); err != nil {
+	if err := c.AlterTopicConfigs(ctx, "orders", TopicConfigChange{Reset: []string{"retention.ms"}, Confirm: "orders"}); err != nil {
 		t.Fatal(err)
 	}
 	if v := configValue(t, c, ctx, "orders", "retention.ms"); v == "3600000" {

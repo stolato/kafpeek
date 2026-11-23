@@ -83,6 +83,45 @@ func (c *Client) SetPartitions(ctx context.Context, name string, count int) erro
 type TopicConfigChange struct {
 	Set   map[string]string `json:"set"`
 	Reset []string          `json:"reset"`
+	// Confirm must repeat the topic name when the change touches a
+	// data-destroying config (see DestructiveConfigs), like delete and purge.
+	Confirm string `json:"confirm,omitempty"`
+}
+
+// destructiveConfigs can delete existing data as soon as the broker applies
+// them: retention.ms=1 is a purge, cleanup.policy=compact drops all but the
+// last record per key, remote.storage.enable=false discards tiered segments.
+// Resetting them is just as dangerous (the default may be shorter).
+var destructiveConfigs = map[string]bool{
+	"retention.ms":          true,
+	"retention.bytes":       true,
+	"local.retention.ms":    true,
+	"local.retention.bytes": true,
+	"cleanup.policy":        true,
+	"delete.retention.ms":   true,
+	"remote.storage.enable": true,
+}
+
+// IsDestructiveConfig reports whether changing the named config can delete data.
+func IsDestructiveConfig(name string) bool {
+	return destructiveConfigs[strings.ToLower(strings.TrimSpace(name))]
+}
+
+// DestructiveConfigs lists the configs in ch that need a confirmation, sorted.
+func (ch TopicConfigChange) DestructiveConfigs() []string {
+	var out []string
+	for k := range ch.Set {
+		if IsDestructiveConfig(k) {
+			out = append(out, strings.TrimSpace(k))
+		}
+	}
+	for _, k := range ch.Reset {
+		if IsDestructiveConfig(k) {
+			out = append(out, strings.TrimSpace(k))
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // AlterTopicConfigs applies an incremental config change to a topic.
@@ -113,6 +152,10 @@ func (c *Client) AlterTopicConfigs(ctx context.Context, name string, ch TopicCon
 	}
 	if _, err := c.writableTopic(ctx, name); err != nil {
 		return err
+	}
+	if keys := ch.DestructiveConfigs(); len(keys) > 0 && ch.Confirm != name {
+		return fmt.Errorf(`%w: changing %s can delete messages; "confirm" must be the exact topic name`,
+			ErrInvalid, strings.Join(keys, ", "))
 	}
 	resps, err := c.adm.AlterTopicConfigs(ctx, alters, name)
 	if err != nil {

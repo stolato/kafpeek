@@ -148,9 +148,19 @@ func avroDecoder(r resolved) (func([]byte) ([]byte, error), error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(p []byte) ([]byte, error) {
+	return func(p []byte) (_ []byte, err error) {
+		if err := checkAvro(sch, p); err != nil {
+			return nil, err
+		}
+		// Hostile bytes must never take the process down: decoding runs on
+		// the shared live-tail and search goroutines, outside any HTTP recoverer.
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("avro decoder panic: %v", r)
+			}
+		}()
 		var v any
-		if err := avro.Unmarshal(sch, p, &v); err != nil {
+		if err := avroAPI.Unmarshal(sch, p, &v); err != nil {
 			return nil, err
 		}
 		return json.Marshal(normalize(v))

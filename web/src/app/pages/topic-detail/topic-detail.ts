@@ -2,7 +2,7 @@ import { Component, computed, inject, input, signal, viewChild } from '@angular/
 import { Observable } from 'rxjs';
 import { httpResource } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { TopicDetail } from '../../core/models';
+import { TopicDetail, isDestructiveConfig } from '../../core/models';
 import { ApiService } from '../../core/api.service';
 import { ConfirmDialog } from '../../shared/confirm-dialog';
 import { ToastService } from '../../shared/toast';
@@ -476,6 +476,26 @@ export class TopicDetailPage {
     });
   }
 
+  /**
+   * Configs that can delete data (retention, cleanup policy...) need the topic
+   * name typed, like delete and purge; the server enforces it too. Resolves to
+   * the `confirm` value to send, or null when the user cancelled.
+   */
+  private async configGuard(config: string, what: string): Promise<{ confirm?: string } | null> {
+    if (!isDestructiveConfig(config)) {
+      return (await this.prodGuard(what)) ? {} : null;
+    }
+    const name = this.name();
+    const ok = await this.confirmDlg().ask({
+      title: `Change ${config.trim()}`,
+      message: `${what}\nChanging ${config.trim()} can permanently delete messages from ${name} as soon as the broker applies it.`,
+      confirmLabel: 'Apply',
+      requireText: name,
+      danger: true,
+    });
+    return ok ? { confirm: name } : null;
+  }
+
   protected async deleteTopic() {
     const name = this.name();
     const ok = await this.confirmDlg().ask({
@@ -544,8 +564,9 @@ export class TopicDetailPage {
       this.editing.set(null);
       return;
     }
-    if (!(await this.prodGuard(`Set ${name} = ${value}`))) return;
-    this.run(this.api.alterTopicConfigs(this.name(), { set: { [name]: value } }), () => {
+    const guard = await this.configGuard(name, `Set ${name} = ${value}`);
+    if (!guard) return;
+    this.run(this.api.alterTopicConfigs(this.name(), { set: { [name]: value }, ...guard }), () => {
       this.editing.set(null);
       this.toast.show(`${name} updated`);
     });
@@ -562,21 +583,28 @@ export class TopicDetailPage {
   protected async saveNew() {
     const name = this.newName().trim();
     if (!name || this.working()) return;
-    if (!(await this.prodGuard(`Set ${name} = ${this.newValue()}`))) return;
-    this.run(this.api.alterTopicConfigs(this.name(), { set: { [name]: this.newValue() } }), () => {
+    const guard = await this.configGuard(name, `Set ${name} = ${this.newValue()}`);
+    if (!guard) return;
+    this.run(this.api.alterTopicConfigs(this.name(), { set: { [name]: this.newValue() }, ...guard }), () => {
       this.adding.set(false);
       this.toast.show(`${name} overridden`);
     });
   }
 
   protected async resetConfig(name: string) {
-    const ok = await this.confirmDlg().ask({
-      title: `Reset ${name}`,
-      message: `Remove the topic override; ${name} falls back to the broker/cluster default.`,
-      confirmLabel: 'Reset to default',
-    });
-    if (!ok) return;
-    this.run(this.api.alterTopicConfigs(this.name(), { reset: [name] }), () => this.toast.show(`${name} reset to default`));
+    const what = `Remove the topic override; ${name} falls back to the broker/cluster default.`;
+    let guard: { confirm?: string } | null = {};
+    if (isDestructiveConfig(name)) {
+      guard = await this.configGuard(name, what);
+    } else if (
+      !(await this.confirmDlg().ask({ title: `Reset ${name}`, message: what, confirmLabel: 'Reset to default' }))
+    ) {
+      guard = null;
+    }
+    if (!guard) return;
+    this.run(this.api.alterTopicConfigs(this.name(), { reset: [name], ...guard }), () =>
+      this.toast.show(`${name} reset to default`),
+    );
   }
 
   protected config(name: string): string | undefined {
