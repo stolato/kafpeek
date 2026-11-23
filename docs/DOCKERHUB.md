@@ -25,8 +25,8 @@ search with CEL filters, live tail, and AWS MSK IAM support.
 | Tag | Description |
 |---|---|
 | `latest` | Latest stable version |
-| `X.Y.Z` (e.g. `0.1.2`) | Exact version (recommended in production) |
-| `X.Y` (e.g. `0.1`) | Latest patch of the series |
+| `X.Y.Z` (e.g. `0.2.0`) | Exact version (recommended in production) |
+| `X.Y` (e.g. `0.2`) | Latest patch of the series |
 
 Architectures: `linux/amd64` and `linux/arm64`. Also available at `ghcr.io/stolato/kafpeek`.
 
